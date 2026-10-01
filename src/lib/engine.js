@@ -1,0 +1,376 @@
+// Pure functions that derive progress, analytics and recommendations from stored records.
+import { addDays, diffDays, isSunday, weekStart } from './dates.js'
+import { STUDY_SLOTS, generatePlan, TOTAL_STUDY_DAYS, testUnlockMin, slotTimes, DEFAULT_START_MIN } from './plan.js'
+import { TOPICS, EXAM } from './syllabus.js'
+import { questionFromId } from './questions/index.js'
+
+export const REVISION_OFFSETS = [1, 4, 7, 14, 30]
+export const MISTAKE_REVISION_OFFSETS = [1, 4, 7]
+export const TARGET_SEC = { reasoning: (EXAM.sections[0].minutes * 60) / EXAM.sections[0].questions, numerical: (EXAM.sections[1].minutes * 60) / EXAM.sections[1].questions }
+export const MISTAKE_TYPES = ['Concept Error', 'Calculation Error', 'Silly Mistake', 'Time Pressure', 'Guessing', 'Other']
+
+export const accuracy = (correct, attempted) => (attempted ? Math.round((correct / attempted) * 1000) / 10 : 0)
+export const nextStudyDate = (iso) => (isSunday(iso) ? addDays(iso, 1) : iso)
+
+export const sessionId = (dayNo, slotKey) => `s-${dayNo}-${slotKey}`
+export const dailyTestId = (dayNo) => `daily-${dayNo}`
+
+export function allTopics(content) {
+  const hidden = new Set(content?.hiddenTopics || [])
+  return [...TOPICS, ...(content?.topics || [])].filter((t) => !hidden.has(t.id))
+}
+
+export function getPlan(state) {
+  if (!state.profile) return []
+  return generatePlan({
+    startDate: state.profile.start_date,
+    level: state.profile.level,
+    reasoningConfidence: state.profile.reasoning_confidence,
+    numericalConfidence: state.profile.numerical_confidence,
+  }, state.content?.planOverrides || {})
+}
+
+/** Every answered question across all submitted attempts: { qid, topic, subject, correct, time, date, attemptId, kind } */
+export function answerLog(state) {
+  const out = []
+  for (const a of Object.values(state.attempts || {})) {
+    if (!a.submitted_at) continue
+    for (const qid of a.question_ids) {
+      const ans = a.answers?.[qid]
+      const meta = a.meta?.[qid]
+      if (!meta) continue
+      out.push({ qid, topic: meta.topic, subject: meta.subject, correct: ans?.choice === meta.answer, skipped: ans?.choice == null,
+        time: ans?.time_sec || 0, date: a.date, attemptId: a.id, kind: a.kind })
+    }
+  }
+  return out.sort((x, y) => (x.date < y.date ? -1 : 1))
+}
+
+/** Per-topic statistics, including learning → practice → revision → test stage tracking. */
+export function topicStats(state, plan = getPlan(state)) {
+  const log = answerLog(state).filter((x) => !x.skipped)
+  const stats = {}
+  for (const t of allTopics(state.content)) {
+    stats[t.id] = { id: t.id, subject: t.subject, name: t.name, attempted: 0, correct: 0, time: 0, recent: [], lastPracticed: null,
+      mistakes: 0, learned: false, practiced: false, revised: false, tested: false, testAttempted: 0, testCorrect: 0, sessionQs: 0, sessionCorrect: 0 }
+  }
+  for (const x of log) {
+    const s = stats[x.topic]
+    if (!s) continue
+    s.attempted++; s.correct += x.correct ? 1 : 0; s.time += x.time
+    s.recent.push(x.correct ? 1 : 0)
+    if (!s.lastPracticed || x.date > s.lastPracticed) s.lastPracticed = x.date
+    if (['daily', 'mock', 'topic', 'subject', 'mixed'].includes(x.kind)) { s.testAttempted++; s.testCorrect += x.correct ? 1 : 0 }
+  }
+  for (const ses of Object.values(state.sessions || {})) {
+    const s = stats[ses.topic_id]
+    if (!s || ses.status !== 'completed') continue
+    if (ses.slot_key.endsWith('concept')) s.learned = true
+    if (ses.slot_key.endsWith('practice') || ses.slot_key === 'weak') s.practiced = true
+    if (ses.manual_attempted) { // questions solved outside the app (in-app practice is already in the answer log)
+      s.sessionQs += ses.manual_attempted; s.sessionCorrect += ses.manual_correct || 0
+      if (!s.lastPracticed || ses.date > s.lastPracticed) s.lastPracticed = ses.date
+    }
+  }
+  for (const r of Object.values(state.revisions || {})) if (r.status === 'done' && stats[r.topic_id]) stats[r.topic_id].revised = true
+  for (const m of Object.values(state.mistakes || {})) if (stats[m.topic_id]) stats[m.topic_id].mistakes++
+  const today = state._today
+  for (const s of Object.values(stats)) {
+    if (s.testAttempted >= 5) s.tested = true
+    if (s.attempted >= 20) s.practiced = true
+    const totA = s.attempted + s.sessionQs, totC = s.correct + s.sessionCorrect
+    s.totalAttempted = totA
+    s.accuracy = accuracy(totC, totA)
+    const rec = s.recent.slice(-25)
+    s.recentAccuracy = rec.length ? Math.round((rec.reduce((a, b) => a + b, 0) / rec.length) * 1000) / 10 : s.accuracy
+    s.avgTime = s.attempted ? Math.round(s.time / s.attempted) : 0
+    s.completion = 25 * [s.learned, s.practiced, s.revised, s.tested].filter(Boolean).length
+    const pending = Object.values(state.revisions || {}).filter((r) => r.topic_id === s.id && r.status === 'pending').sort((a, b) => (a.due_date < b.due_date ? -1 : 1))
+    s.revisionDue = pending[0]?.due_date || null
+    const plannedDay = plan.find((d) => d.reasoning_topic === s.id || d.numerical_topic === s.id)
+    s.firstPlannedDay = plannedDay?.day_no || null
+    // Weakness score: recent accuracy (60%), speed vs target (20%), mistake density (20%).
+    const target = TARGET_SEC[s.subject] || 36
+    const speedScore = s.avgTime ? Math.max(0, Math.min(100, (target / s.avgTime) * 100)) : 100
+    const mistakeScore = Math.max(0, 100 - (s.attempted ? (s.mistakes / s.attempted) * 200 : 0))
+    s.score = Math.round(0.6 * s.recentAccuracy + 0.2 * speedScore + 0.2 * mistakeScore)
+    s.status = totA < 5 ? 'new' : s.recentAccuracy < 70 || s.score < 65 ? 'weak' : s.recentAccuracy >= 85 && totA >= 10 ? 'strong' : 'average'
+    s.daysSince = s.lastPracticed && today ? diffDays(s.lastPracticed, today) : null
+  }
+  return stats
+}
+
+export const weakTopics = (stats, subject) =>
+  Object.values(stats).filter((s) => s.status === 'weak' && (!subject || s.subject === subject)).sort((a, b) => a.recentAccuracy - b.recentAccuracy || a.score - b.score)
+export const strongTopics = (stats, subject) =>
+  Object.values(stats).filter((s) => s.status === 'strong' && (!subject || s.subject === subject)).sort((a, b) => b.recentAccuracy - a.recentAccuracy)
+
+/** Topics actually assigned to a plan day — snapshots from started sessions win, adaptive days use weak topics. */
+export function resolveDay(state, day, stats, plan = getPlan(state)) {
+  const ses = (k) => state.sessions?.[sessionId(day.day_no, k)]
+  const started = (k) => ses(k) && ses(k).status !== 'not_started'
+  let r = day.reasoning_topic, n = day.numerical_topic
+  if (day.adaptive && !day.is_mock_day && stats) {
+    const wr = weakTopics(stats, 'reasoning')[0], wn = weakTopics(stats, 'numerical')[0]
+    if (wr && !started('r-concept') && day.date > state._today) r = wr.id
+    if (wn && !started('n-concept') && day.date > state._today) n = wn.id
+  }
+  if (started('r-concept')) r = ses('r-concept').topic_id
+  if (started('n-concept')) n = ses('n-concept').topic_id
+  // Weak/additional slot: carry forward an incomplete concept topic from the previous study day, else weakest topic.
+  let weak = null, weakReason = ''
+  if (started('weak')) { weak = ses('weak').topic_id; weakReason = 'Selected when the session started' }
+  else {
+    const prev = plan.find((d) => d.day_no === day.day_no - 1)
+    if (prev) {
+      for (const k of ['r-concept', 'n-concept']) {
+        const ps = state.sessions?.[sessionId(prev.day_no, k)]
+        if (!ps || ps.status !== 'completed') {
+          const tid = ps?.topic_id || (k === 'r-concept' ? prev.reasoning_topic : prev.numerical_topic)
+          if (tid !== 'mixed' && prev.date < state._today) { weak = tid; weakReason = `Carried forward — Day ${prev.day_no} concept session was not completed`; break }
+        }
+      }
+    }
+    if (!weak && stats) {
+      const w = weakTopics(stats)[0]
+      if (w) { weak = w.id; weakReason = `Weak topic — recent accuracy ${w.recentAccuracy}%` }
+    }
+    if (!weak) {
+      weak = day.is_mock_day ? 'mixed' : (stats && (stats[r]?.accuracy ?? 100) <= (stats[n]?.accuracy ?? 100) ? r : n)
+      weakReason = day.is_mock_day ? 'Mock analysis — re-attempt today’s mock mistakes' : 'Additional practice on today’s topic'
+    }
+  }
+  return { ...day, reasoning_topic: r, numerical_topic: n, weak_topic: weak, weak_reason: weakReason }
+}
+
+export function sessionTopic(rday, slot) {
+  if (slot.key === 'revision') return 'revision'
+  if (slot.key === 'weak') return rday.weak_topic
+  return slot.subject === 'reasoning' ? rday.reasoning_topic : rday.numerical_topic
+}
+
+/** Session records for a day (stored or default "not started"). */
+export function daySessions(state, rday) {
+  return STUDY_SLOTS.map((slot) => {
+    const id = sessionId(rday.day_no, slot.key)
+    const rec = state.sessions?.[id]
+    const topic = rec?.topic_id || sessionTopic(rday, slot)
+    return { id, slot, day_no: rday.day_no, date: rday.date, topic_id: topic, status: 'not_started', attempted: 0, correct: 0, elapsed_sec: 0, ...rec }
+  })
+}
+
+export function dayStatus(state, day, today) {
+  const sessions = STUDY_SLOTS.map((s) => state.sessions?.[sessionId(day.day_no, s.key)])
+  const done = sessions.filter((s) => s?.status === 'completed').length
+  const any = sessions.some((s) => s && s.status !== 'not_started')
+  const test = state.attempts?.[dailyTestId(day.day_no)]
+  const testDone = !!test?.submitted_at
+  const total = STUDY_SLOTS.length + 1
+  const completedUnits = done + (testDone ? 1 : 0)
+  let status
+  if (completedUnits === total) status = 'completed'
+  else if (day.date > today) status = 'upcoming'
+  else if (completedUnits > 0 || any) status = day.date === today ? 'in_progress' : 'partial'
+  else status = day.date === today ? 'today' : 'missed'
+  return { status, done, testDone, total, completedUnits, pct: Math.round((completedUnits / total) * 100), testScore: test?.score, testAccuracy: test?.accuracy }
+}
+
+export function streak(state, plan, today) {
+  // Count consecutive active study days backwards (Sundays never break a streak).
+  const active = (d) => { const s = dayStatus(state, d, today); return s.testDone || s.done >= 4 }
+  const past = plan.filter((d) => d.date <= today).reverse()
+  let count = 0, best = 0, run = 0
+  let started = false
+  for (const d of past) {
+    if (active(d)) { count++; started = true } else if (d.date === today && !started) continue
+    else break
+  }
+  for (const d of plan.filter((x) => x.date <= today)) { if (active(d)) { run++; best = Math.max(best, run) } else if (d.date !== today) run = 0 }
+  return { current: count, best }
+}
+
+/** Revision dates for a topic learned on `date` (Sundays shift to Monday). */
+export function revisionDates(date, offsets = REVISION_OFFSETS) {
+  return offsets.map((o) => nextStudyDate(addDays(date, o)))
+}
+
+export function createTopicRevisions(state, topicId, date) {
+  const existing = Object.values(state.revisions).filter((r) => r.topic_id === topicId && r.kind === 'topic' && r.source_date === date)
+  if (existing.length) return []
+  return revisionDates(date).map((due, i) => ({ id: `rev-${topicId}-${date}-${i + 1}`, kind: 'topic', topic_id: topicId, source_date: date, step: i + 1,
+    label: `Revision ${i + 1} (Day +${REVISION_OFFSETS[i]})`, due_date: due, status: 'pending', completed_at: null }))
+}
+
+export function dueRevisions(state, today) {
+  return Object.values(state.revisions || {}).filter((r) => r.status === 'pending' && r.due_date <= today).sort((a, b) => (a.due_date < b.due_date ? -1 : 1))
+}
+
+export function dueMistakes(state, today) {
+  return Object.values(state.mistakes || {}).filter((m) => !m.mastered && (m.revision_dates || []).some((d) => d <= today && !(m.revised_dates || []).includes(d)))
+}
+
+/** Aggregate numbers for the dashboard. */
+export function overview(state, plan, today, stats) {
+  const log = answerLog(state)
+  const sessions = Object.values(state.sessions || {})
+  const studySec = sessions.reduce((s, x) => s + (x.elapsed_sec || 0), 0)
+  const manualQs = sessions.reduce((s, x) => s + (x.manual_attempted || 0), 0)
+  const manualCorrect = sessions.reduce((s, x) => s + (x.manual_correct || 0), 0)
+  const answered = log.filter((x) => !x.skipped)
+  const attempts = Object.values(state.attempts || {}).filter((a) => a.submitted_at)
+  const daysDone = plan.filter((d) => dayStatus(state, d, today).status === 'completed').length
+  const curDay = plan.findLast?.((d) => d.date <= today) || [...plan].reverse().find((d) => d.date <= today)
+  return {
+    currentDay: curDay ? curDay.day_no : 0,
+    daysCompleted: daysDone,
+    progressPct: Math.round(((curDay?.day_no || 0) / TOTAL_STUDY_DAYS) * 100),
+    completionPct: Math.round((daysDone / TOTAL_STUDY_DAYS) * 100),
+    studyHours: Math.round((studySec / 3600) * 10) / 10,
+    questions: answered.length + manualQs,
+    accuracy: accuracy(answered.filter((x) => x.correct).length + manualCorrect, answered.length + manualQs),
+    dailyTests: attempts.filter((a) => a.kind === 'daily').length,
+    mocks: attempts.filter((a) => a.kind === 'mock').length,
+    streak: streak(state, plan, today),
+    weak: stats ? weakTopics(stats).slice(0, 5) : [],
+  }
+}
+
+export function speedStats(state) {
+  const log = answerLog(state).filter((x) => !x.skipped)
+  const out = {}
+  for (const sub of ['reasoning', 'numerical']) {
+    const xs = log.filter((x) => x.subject === sub)
+    const recent = xs.slice(-60)
+    const t = recent.reduce((s, x) => s + x.time, 0)
+    out[sub] = {
+      attempted: xs.length,
+      avgSec: recent.length ? Math.round(t / recent.length) : 0,
+      qpm: t ? Math.round((recent.length / (t / 60)) * 100) / 100 : 0,
+      accuracy: accuracy(recent.filter((x) => x.correct).length, recent.length),
+      targetSec: Math.round(TARGET_SEC[sub] * 10) / 10,
+      targetQpm: Math.round((60 / TARGET_SEC[sub]) * 100) / 100,
+    }
+  }
+  return out
+}
+
+/** Weekly report for the week (Mon–Sat) that contains or precedes `iso`. */
+export function weeklyReport(state, plan, iso, stats) {
+  const start = weekStart(iso), end = addDays(start, 5)
+  const days = plan.filter((d) => d.date >= start && d.date <= end)
+  const today = state._today
+  const ds = days.map((d) => ({ day: d, st: dayStatus(state, d, today) }))
+  const ids = new Set(days.map((d) => d.date))
+  const log = answerLog(state).filter((x) => ids.has(x.date) && !x.skipped)
+  const sessions = Object.values(state.sessions || {}).filter((s) => ids.has(s.date))
+  const sub = (k) => { const xs = log.filter((x) => x.subject === k); return { attempted: xs.length, accuracy: accuracy(xs.filter((x) => x.correct).length, xs.length) } }
+  const weak = stats ? weakTopics(stats).slice(0, 4) : []
+  const strong = stats ? strongTopics(stats).slice(0, 4) : []
+  const nextDays = plan.filter((d) => d.date > end).slice(0, 6)
+  return {
+    start, end, days: ds,
+    studyDays: ds.filter((x) => x.st.status === 'completed').length,
+    activeDays: ds.filter((x) => x.st.completedUnits > 0).length,
+    hours: Math.round((sessions.reduce((s, x) => s + (x.elapsed_sec || 0), 0) / 3600) * 10) / 10,
+    questions: log.length + sessions.reduce((s, x) => s + (x.manual_attempted || 0), 0),
+    dailyTests: ds.filter((x) => x.st.testDone).length,
+    accuracy: accuracy(log.filter((x) => x.correct).length, log.length),
+    reasoning: sub('reasoning'), numerical: sub('numerical'), weak, strong,
+    nextFocus: [...new Set([...weak.map((w) => w.name), ...nextDays.flatMap((d) => [d.reasoning_topic, d.numerical_topic]).filter((t) => t !== 'mixed').map((t) => stats?.[t]?.name || t)])].slice(0, 5),
+  }
+}
+
+/** "What should I study now?" */
+export function recommend(state, plan, today, nowMin, stats) {
+  const startMin = state.profile?.study_start_min ?? DEFAULT_START_MIN
+  const day = plan.find((d) => d.date === today)
+  const due = dueRevisions(state, today)
+  const weak = weakTopics(stats)
+  const mistakes = dueMistakes(state, today)
+  const name = (id) => stats[id]?.name || id
+  if (!day) {
+    if (isSunday(today)) return { kind: 'weekly', title: 'Sunday — Weekly Review', reason: 'Sunday is not a study day. Review this week’s report and plan next week.', action: { to: '/calendar?weekly=1', label: 'Open Weekly Report' } }
+    if (plan.length && today < plan[0].date) return { kind: 'wait', title: 'Your plan starts soon', reason: `Day 1 begins on ${plan[0].date}. Preview the 60-day plan meanwhile.`, action: { to: '/plan', label: 'View 60-Day Plan' } }
+    return { kind: 'done', title: 'Plan complete — keep revising', reason: 'All 60 study days are over. Take mocks and revise weak topics until the exam.', action: { to: '/mock-tests', label: 'Take a Mock Test' } }
+  }
+  const rday = resolveDay(state, day, stats, plan)
+  const sessions = daySessions(state, rday)
+  const testUnlock = testUnlockMin(startMin)
+  const test = state.attempts?.[dailyTestId(day.day_no)]
+  if (nowMin >= testUnlock && !test?.submitted_at) return { kind: 'test', title: 'Take today’s Daily Test', reason: 'It is the final session of the day and is now unlocked. It is based on today’s topics.', detail: '30 questions · 30 minutes', action: { to: '/daily-test', label: 'Start Daily Test' } }
+  const running = sessions.find((s) => s.status === 'in_progress' || s.status === 'paused')
+  if (running) return { kind: 'session', title: `Continue ${running.slot.label}`, reason: `${name(running.topic_id)} is in progress.`, sessionId: running.id, action: { to: '/today', label: 'Resume Session' } }
+  // Current timetable slot
+  const cur = sessions.find((s) => { const t = slotTimes(s.slot, startMin); return nowMin >= t.start && nowMin < t.end })
+  if (cur && cur.status !== 'completed') {
+    const t = slotTimes(cur.slot, startMin)
+    return { kind: 'session', title: cur.slot.key === 'revision' ? 'Today’s Revision' : `${cur.slot.subject === 'reasoning' ? '🧠' : cur.slot.subject === 'numerical' ? '🔢' : '🎯'} ${name(cur.topic_id)}`,
+      reason: `Scheduled now: ${cur.slot.label}.${cur.slot.key === 'weak' ? ' ' + rday.weak_reason + '.' : ''}`, detail: `${t.start}-${t.end}`, sessionId: cur.id, action: { to: '/today', label: 'Start Session' } }
+  }
+  if (due.length && nowMin < testUnlock) {
+    const overdue = due.filter((r) => r.due_date < today)
+    return { kind: 'revision', title: `Revise ${name(due[0].topic_id)}`, reason: overdue.length ? `${overdue.length} revision(s) overdue — spaced repetition keeps topics fresh.` : 'Revision is due today.',
+      detail: '10-minute formula recap + 10 practice questions', topic: due[0].topic_id, action: { to: '/revision', label: 'Open Revision' } }
+  }
+  if (weak.length) return { kind: 'practice', title: `Study ${weak[0].name}`, reason: `Recent accuracy is low (${weak[0].recentAccuracy}%).`, detail: '20 practice questions + 10-minute revision', topic: weak[0].id, action: { to: `/practice?topic=${weak[0].id}&count=20`, label: 'Practice Now' } }
+  if (mistakes.length) return { kind: 'mistakes', title: 'Re-attempt Mistake Book questions', reason: `${mistakes.length} mistake(s) are due for revision.`, action: { to: '/mistakes?due=1', label: 'Open Mistake Book' } }
+  const next = sessions.find((s) => s.status !== 'completed')
+  if (next) return { kind: 'session', title: `${next.slot.label}`, reason: `Next pending session: ${name(next.topic_id)}.`, sessionId: next.id, action: { to: '/today', label: 'Go to Today’s Plan' } }
+  if (nowMin < testUnlock) return { kind: 'wait', title: 'All sessions done — great work!', reason: 'The Daily Test unlocks at the final slot. Do a quick formula revision until then.', action: { to: '/revision', label: 'Quick Revision' } }
+  return { kind: 'done', title: 'Today’s preparation is complete!', reason: 'Rest well. Tomorrow’s plan is ready.', action: { to: '/plan', label: 'View Plan' } }
+}
+
+export const ACHIEVEMENTS = [
+  { key: 'first-session', name: 'First Step', desc: 'Complete your first study session', icon: '🚀' },
+  { key: 'streak-7', name: '7-Day Streak', desc: 'Study 7 study-days in a row', icon: '🔥' },
+  { key: 'streak-15', name: '15-Day Streak', desc: 'Study 15 study-days in a row', icon: '⚡' },
+  { key: 'streak-30', name: '30-Day Streak', desc: 'Study 30 study-days in a row', icon: '🏆' },
+  { key: 'q-1000', name: '1000 Questions', desc: 'Solve 1,000 questions', icon: '📚' },
+  { key: 'q-5000', name: '5000 Questions', desc: 'Solve 5,000 questions', icon: '🧮' },
+  { key: 'first-daily', name: 'Daily Test Done', desc: 'Complete your first Daily Test', icon: '📝' },
+  { key: 'first-mock', name: 'First Mock', desc: 'Complete your first full Prelims mock', icon: '🎯' },
+  { key: 'acc-90', name: '90% Accuracy', desc: 'Score 90%+ accuracy in a test of 20+ questions', icon: '💎' },
+  { key: 'syllabus', name: 'Full Syllabus Completed', desc: 'Complete the concept session of every syllabus topic', icon: '🎓' },
+  { key: 'mistake-master', name: 'Mistake Master', desc: 'Master 25 Mistake Book questions', icon: '🛠️' },
+]
+
+export function earnedAchievements(state, plan, today, stats, ov) {
+  const subs = Object.values(state.attempts || {}).filter((a) => a.submitted_at)
+  const earned = new Set()
+  if (Object.values(state.sessions || {}).some((s) => s.status === 'completed')) earned.add('first-session')
+  if (ov.streak.best >= 7) earned.add('streak-7')
+  if (ov.streak.best >= 15) earned.add('streak-15')
+  if (ov.streak.best >= 30) earned.add('streak-30')
+  if (ov.questions >= 1000) earned.add('q-1000')
+  if (ov.questions >= 5000) earned.add('q-5000')
+  if (subs.some((a) => a.kind === 'daily')) earned.add('first-daily')
+  if (subs.some((a) => a.kind === 'mock')) earned.add('first-mock')
+  if (subs.some((a) => a.question_ids.length >= 20 && a.accuracy >= 90)) earned.add('acc-90')
+  const syll = allTopics(state.content).filter((t) => TOPICS.some((x) => x.id === t.id))
+  if (syll.every((t) => stats[t.id]?.learned)) earned.add('syllabus')
+  if (Object.values(state.mistakes || {}).filter((m) => m.mastered).length >= 25) earned.add('mistake-master')
+  return earned
+}
+
+/** Score an attempt. Negative marking applies to mocks (official pattern: 0.25 per wrong answer). */
+export function scoreAttempt(attempt, questions, negative = 0) {
+  let correct = 0, wrong = 0, skipped = 0
+  const bySubject = {}, byTopic = {}
+  const meta = {}
+  for (const q of questions) {
+    const a = attempt.answers?.[q.id]
+    const sub = (bySubject[q.subject] ||= { attempted: 0, correct: 0, wrong: 0, skipped: 0, total: 0, time: 0, score: 0 })
+    const top = (byTopic[q.topic] ||= { attempted: 0, correct: 0, total: 0, time: 0 })
+    sub.total++; top.total++
+    sub.time += a?.time_sec || 0; top.time += a?.time_sec || 0
+    meta[q.id] = { topic: q.topic, subject: q.subject, answer: q.answer, difficulty: q.difficulty }
+    if (a?.choice == null) { skipped++; sub.skipped++; continue }
+    sub.attempted++; top.attempted++
+    if (a.choice === q.answer) { correct++; sub.correct++; top.correct++ } else { wrong++; sub.wrong++ }
+  }
+  for (const s of Object.values(bySubject)) s.score = s.correct - s.wrong * negative
+  const attempted = correct + wrong
+  return { correct, wrong, skipped, attempted, score: Math.round((correct - wrong * negative) * 100) / 100, max: questions.length, accuracy: accuracy(correct, attempted), bySubject, byTopic, meta }
+}
+
+export const resolveQuestions = (ids, content) => ids.map((id) => questionFromId(id, content?.questions || [])).filter(Boolean)
