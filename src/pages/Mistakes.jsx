@@ -7,9 +7,10 @@ import { createMistakeQuiz } from '../lib/tests.js'
 import { fmtDate, weekStart } from '../lib/dates.js'
 import { topicName } from '../lib/syllabus.js'
 import { PageHeader, Empty, SubjectChip, cx } from '../components/ui.jsx'
+import { rich } from '../components/TestRunner.jsx'
 
 const FILTERS = [
-  ['all', 'All'], ['reasoning', 'Reasoning'], ['numerical', 'Numerical Ability'], ['today', 'Today'], ['week', 'This Week'],
+  ['all', 'All'], ['reasoning', 'Reasoning'], ['numerical', 'Numerical Ability'], ['language', 'English/Hindi'], ['ga', 'GA'], ['computer', 'Computer'], ['today', 'Today'], ['week', 'This Week'],
   ['Concept Error', 'Concept Mistakes'], ['Calculation Error', 'Calculation Mistakes'], ['Silly Mistake', 'Silly Mistakes'], ['Time Pressure', 'Time Pressure'], ['due', 'Due for revision'],
 ]
 
@@ -52,13 +53,13 @@ export default function Mistakes() {
                     {m.mastered ? <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Mastered</span> : due.has(m.id) && <span className="chip bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">Revise today</span>}
                     <span className="text-slate-400">{fmtDate(m.date)}</span>
                   </div>
-                  <p className="mt-1 line-clamp-2 text-sm whitespace-pre-line text-slate-700 dark:text-slate-300">{m.question_text.split('\n').slice(-3).join(' ')}</p>
+                  <p className="mt-1 line-clamp-2 text-sm whitespace-pre-line text-slate-700 dark:text-slate-300">{m.question_text.replace(/\*\*/g, '').split('\n').slice(-3).join(' ')}</p>
                 </div>
                 <ChevronDown size={18} className={cx('shrink-0 transition', open === m.id && 'rotate-180')} />
               </button>
               {open === m.id && (
                 <div className="space-y-3 border-t border-slate-100 p-4 text-sm dark:border-slate-800">
-                  <p className="whitespace-pre-line">{m.question_text}</p>
+                  <p className="whitespace-pre-line">{rich(m.question_text)}</p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="rounded-lg bg-rose-50 px-3 py-2 dark:bg-rose-950"><span className="text-xs font-semibold text-rose-600 uppercase">Your answer</span><div>{m.wrong_answer}</div></div>
                     <div className="rounded-lg bg-emerald-50 px-3 py-2 dark:bg-emerald-950"><span className="text-xs font-semibold text-emerald-600 uppercase">Correct answer</span><div>{m.correct_answer}</div></div>

@@ -15,9 +15,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       manifest: {
-        name: 'RRB OA Prelims Coach',
+        name: 'RRB OA Coach',
         short_name: 'RRB Coach',
-        description: '60-study-day coach for CRP RRBs XV Office Assistant (Multipurpose) Prelims',
+        description: '60-study-day integrated Prelims + Mains coach for CRP RRBs XV Office Assistant (Multipurpose)',
         theme_color: '#1d4ed8',
         background_color: '#0b1220',
         display: 'standalone',

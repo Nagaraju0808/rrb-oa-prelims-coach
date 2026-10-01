@@ -1,12 +1,14 @@
-// CRP RRBs XV — Office Assistant (Multipurpose) — Preliminary Examination.
-// Exam structure verified against the official IBPS notification (CRP-RRBs-XV, section D, p.20):
-//   Reasoning 40 Q / 40 marks / 25 min, Numerical Ability 40 Q / 40 marks / 20 min,
-//   total 80 Q / 80 marks / 45 min, separately timed tests, 0.25 negative marking,
-//   candidates must clear the cut-off in BOTH tests.
+// CRP RRBs XV — Office Assistant (Multipurpose). Integrated Prelims + Mains preparation.
+// Exam structures verified against the official IBPS notification (CRP-RRBs-XV, section D):
+//   Prelims: Reasoning 40 Q / 40 marks / 25 min, Numerical Ability 40 / 40 / 20 min (80 Q, 45 min)
+//   Mains:   Reasoning 40/50/30, Computer Knowledge 40/20/15, General Awareness 40/40/15,
+//            English OR Hindi Language 40/40/30, Numerical Ability 40/50/30 (200 Q, 200 marks, 120 min)
+//   0.25 negative marking in every objective test; separately timed tests; cut-off in each test.
 // The chapter list below is the preparation checklist (IBPS does not publish a chapter-wise list).
 
+const NOTIFICATION = 'https://www.ibps.in/wp-content/uploads/CRP-RRBs-XV-notification.pdf'
 export const EXAM = {
-  id: 'rrb-xv-oa-prelims',
+  id: 'rrb-xv-oa',
   name: 'CRP RRBs XV — Office Assistant (Multipurpose)',
   stage: 'Preliminary Examination',
   window: 'November / December 2026 (tentative, per IBPS notification)',
@@ -15,16 +17,40 @@ export const EXAM = {
     { subject: 'reasoning', name: 'Reasoning', questions: 40, marks: 40, minutes: 25 },
     { subject: 'numerical', name: 'Numerical Ability', questions: 40, marks: 40, minutes: 20 },
   ],
-  source: 'https://www.ibps.in/wp-content/uploads/CRP-RRBs-XV-notification.pdf',
+  source: NOTIFICATION,
+}
+export const MAINS = {
+  id: 'rrb-xv-oa-mains',
+  name: 'CRP RRBs XV — Office Assistant (Multipurpose)',
+  stage: 'Main Examination',
+  window: 'December 2026 / February 2027 (tentative, per IBPS notification)',
+  negativeMark: 0.25,
+  sections: [
+    { subject: 'reasoning', name: 'Reasoning', questions: 40, marks: 50, minutes: 30 },
+    { subject: 'computer', name: 'Computer Knowledge', questions: 40, marks: 20, minutes: 15 },
+    { subject: 'ga', name: 'General Awareness', questions: 40, marks: 40, minutes: 15 },
+    { subject: 'language', name: 'English / Hindi Language', questions: 40, marks: 40, minutes: 30 },
+    { subject: 'numerical', name: 'Numerical Ability', questions: 40, marks: 50, minutes: 30 },
+  ],
+  source: NOTIFICATION,
 }
 
-// Subjects are data so future modules (GA, Computer, English, Mains) can be added without touching the core.
+// Subjects are data, so new modules can be added without touching the core.
 export const SUBJECTS = [
-  { id: 'reasoning', name: 'Reasoning Ability', short: 'Reasoning', icon: '🧠', color: 'violet' },
-  { id: 'numerical', name: 'Numerical Ability', short: 'Numerical', icon: '🔢', color: 'sky' },
+  { id: 'reasoning', name: 'Reasoning Ability', short: 'Reasoning', icon: '🧠', color: 'violet', exams: ['prelims', 'mains'] },
+  { id: 'numerical', name: 'Numerical Ability', short: 'Numerical', icon: '🔢', color: 'sky', exams: ['prelims', 'mains'] },
+  { id: 'language', name: 'English / Hindi Language', short: 'English/Hindi', icon: '🗣️', color: 'emerald', exams: ['mains'] },
+  { id: 'ga', name: 'General Awareness', short: 'GA', icon: '📰', color: 'amber', exams: ['mains'] },
+  { id: 'computer', name: 'Computer Knowledge', short: 'Computer', icon: '💻', color: 'rose', exams: ['mains'] },
 ]
+export const subjectById = Object.fromEntries(SUBJECTS.map((x) => [x.id, x]))
+export const SUBJECT_IDS = SUBJECTS.map((x) => x.id)
 
-const t = (id, subject, name, priority, subtopics, notes) => ({ id, subject, name, priority, subtopics, notes })
+// exams: where the topic is tested (used internally for emphasis; the student never has to choose a mode).
+// lang: language subject only — 'en' (English Language, Mains test 4a) or 'hi' (Hindi Language, test 4b).
+const t = (id, subject, name, priority, subtopics, notes, extra = {}) => ({
+  id, subject, name, priority, subtopics, notes, exams: subject === 'reasoning' || subject === 'numerical' ? ['prelims', 'mains'] : ['mains'], ...extra,
+})
 
 export const TOPICS = [
   // ---------------- Reasoning ----------------
@@ -181,8 +207,102 @@ export const TOPICS = [
     ['Basic Area', 'Perimeter', 'Rectangle', 'Square', 'Triangle', 'Circle', 'Basic Volume'],
     ['Circle: area πr², circumference 2πr (use π = 22/7).',
       'Rectangle: area lb, perimeter 2(l + b). Cuboid volume lbh, cube a³.']),
+
+  // ---------------- English Language (Mains test 4a) ----------------
+  t('reading-comprehension', 'language', 'Reading Comprehension', 'high',
+    ['Main idea / title', 'Fact-based questions', 'Inference', 'Vocabulary in context', 'Tone of the passage'],
+    ['Read the questions first, then the passage — you then know what to look for.',
+      'Answers must be supported by the passage, not by outside knowledge.'], { lang: 'en' }),
+  t('cloze-test', 'language', 'Cloze Test', 'high',
+    ['Grammar-based blanks', 'Vocabulary-based blanks', 'Connectors'],
+    ['Read the whole paragraph once to get its theme before filling any blank.',
+      'Check grammar first (tense, number, article, preposition), then meaning.'], { lang: 'en' }),
+  t('error-detection', 'language', 'Error Detection', 'high',
+    ['Subject–verb agreement', 'Tenses', 'Articles', 'Prepositions', 'Pronouns', 'Adjectives & adverbs'],
+    ['Find the subject of each clause and check that its verb agrees in number.',
+      'Check tense consistency across the whole sentence.'], { lang: 'en' }),
+  t('sentence-improvement', 'language', 'Sentence Improvement', 'medium',
+    ['Phrase replacement', 'Tense & form correction', 'Conditional sentences'],
+    ['Choose the option that is grammatically correct AND keeps the original meaning.',
+      'If the bold part is already correct, choose “No improvement”.'], { lang: 'en' }),
+  t('fill-blanks', 'language', 'Fill in the Blanks', 'high',
+    ['Single blanks', 'Double blanks', 'Prepositions & phrasal verbs'],
+    ['Eliminate options that break grammar, then compare meanings.',
+      'In double blanks, test the easier blank first to eliminate options.'], { lang: 'en' }),
+  t('para-jumbles', 'language', 'Para Jumbles', 'medium',
+    ['Sentence rearrangement', 'Opening & closing sentence', 'Mandatory pairs'],
+    ['The opening sentence introduces the subject and does not depend on an earlier sentence.',
+      'Pronouns, “the”, connectors and time words link sentences into fixed pairs.'], { lang: 'en' }),
+  t('vocabulary', 'language', 'Vocabulary (Synonyms & Antonyms)', 'medium',
+    ['Synonyms', 'Antonyms', 'Word usage', 'Spelling'],
+    ['Learn words in families (roots, prefixes, suffixes) rather than in isolation.'], { lang: 'en' }),
+  t('idioms-phrases', 'language', 'Idioms & Phrases', 'medium',
+    ['Idioms', 'Phrasal verbs', 'Proverbs'],
+    ['Idioms have fixed figurative meanings — learn each with an example sentence.'], { lang: 'en' }),
+
+  // ---------------- Hindi Language (Mains test 4b) ----------------
+  t('hindi-grammar', 'language', 'हिन्दी व्याकरण (Hindi Grammar)', 'high',
+    ['संधि', 'समास', 'लिंग', 'वचन', 'वाक्य शुद्धि'],
+    ['संधि दो वर्णों का मेल है; समास दो या अधिक शब्दों का मेल है।',
+      'समास-विग्रह करके पहचानें कि कौन-सा पद प्रधान है।'], { lang: 'hi' }),
+  t('hindi-vocabulary', 'language', 'हिन्दी शब्द-ज्ञान (Hindi Vocabulary)', 'high',
+    ['पर्यायवाची', 'विलोम', 'मुहावरे', 'वर्तनी'],
+    ['पर्यायवाची और विलोम शब्दों के जोड़े समूह में याद करें।',
+      'मुहावरे का अर्थ लाक्षणिक होता है, शाब्दिक नहीं।'], { lang: 'hi' }),
+
+  // ---------------- General Awareness (Mains) ----------------
+  t('banking-awareness', 'ga', 'Banking Awareness', 'high',
+    ['RBI & its functions', 'Types of banks', 'Regional Rural Banks', 'NABARD & development banks', 'Payment systems'],
+    ['RRBs were set up to give credit and banking services to small and marginal farmers, labourers and artisans in rural areas.']),
+  t('financial-awareness', 'ga', 'Financial & Economic Terms', 'high',
+    ['Monetary policy tools', 'Reserve ratios', 'Money & capital markets', 'Inflation & GDP basics', 'Abbreviations'],
+    ['Group terms by purpose: rates that control liquidity, ratios banks must maintain, and market instruments.']),
+  t('government-schemes', 'ga', 'Government Schemes', 'high',
+    ['Financial inclusion', 'Insurance & pension', 'Agriculture', 'Entrepreneurship & credit'],
+    ['Learn each scheme as: name → launch year → target group → key benefit.']),
+  t('static-gk', 'ga', 'Static GK', 'medium',
+    ['International organisations', 'Constitution basics', 'Important days', 'Currencies & capitals'],
+    ['Make small tables (organisation → headquarters) and revise them often.']),
+  t('agriculture-rural', 'ga', 'Agriculture & Rural Economy', 'medium',
+    ['Crop seasons', 'Rural credit', 'Agricultural revolutions'],
+    ['RRB Office Assistants serve rural customers — rural credit and farm basics are commonly asked.']),
+  t('current-affairs', 'ga', 'Current Affairs', 'high',
+    ['Banking news', 'Appointments', 'Awards', 'Summits & reports'],
+    ['Cover the last 6 months before the exam from a monthly current-affairs capsule.',
+      'This app has no live news feed — add current-affairs questions and PDFs in the Admin panel.']),
+
+  // ---------------- Computer Knowledge (Mains) ----------------
+  t('computer-fundamentals', 'computer', 'Computer Fundamentals', 'high',
+    ['History & generations', 'Types of computers', 'CPU components', 'Number systems'],
+    ['The CPU contains the ALU (arithmetic & logic), the Control Unit and registers.']),
+  t('computer-hardware', 'computer', 'Hardware & I/O Devices', 'high',
+    ['Input devices', 'Output devices', 'Ports', 'Storage devices'],
+    ['Ask: does the device send data INTO the computer (input) or bring it OUT (output)?']),
+  t('computer-memory', 'computer', 'Computer Memory', 'high',
+    ['Primary memory (RAM/ROM)', 'Cache & registers', 'Secondary storage', 'Units of memory'],
+    ['Fastest → slowest: registers → cache → RAM → secondary storage.']),
+  t('software-os', 'computer', 'Software & Operating Systems', 'high',
+    ['System vs application software', 'Operating system functions', 'Utility software', 'Language translators'],
+    ['The operating system manages hardware, memory, files and processes; applications run on top of it.']),
+  t('ms-office', 'computer', 'MS Office', 'high',
+    ['MS Word', 'MS Excel', 'MS PowerPoint', 'File extensions'],
+    ['Word = documents, Excel = spreadsheets (rows × columns), PowerPoint = presentations.']),
+  t('internet-networking', 'computer', 'Internet & Networking', 'high',
+    ['Types of networks', 'Protocols', 'Internet terms', 'Email'],
+    ['Network size: PAN < LAN < MAN < WAN.']),
+  t('computer-security', 'computer', 'Computer Security', 'medium',
+    ['Malware', 'Phishing & social engineering', 'Firewalls & antivirus', 'Safe banking practices'],
+    ['Banks never ask for your PIN, OTP or password — a message asking for them is phishing.']),
+  t('keyboard-shortcuts', 'computer', 'Keyboard Shortcuts & Abbreviations', 'medium',
+    ['Windows shortcuts', 'MS Office shortcuts', 'Common abbreviations'],
+    ['Learn shortcuts in groups: editing, file, formatting, navigation.']),
+  t('dbms-basics', 'computer', 'Database (DBMS) Basics', 'low',
+    ['Tables, rows & columns', 'Keys', 'SQL basics'],
+    ['A primary key uniquely identifies each row; a foreign key links one table to another.']),
 ]
 
 export const topicById = Object.fromEntries(TOPICS.map((x) => [x.id, x]))
 export const topicsOf = (subject, topics = TOPICS) => topics.filter((x) => x.subject === subject)
+/** Language topics follow the candidate's choice of English or Hindi (Mains test 4a / 4b). */
+export const languageMatches = (topic, language = 'en') => topic.subject !== 'language' || (topic.lang || 'en') === (language === 'hi' ? 'hi' : 'en')
 export const topicName = (id) => topicById[id]?.name || id

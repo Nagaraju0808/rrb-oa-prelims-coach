@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { generateQuestion, GENERATORS, buildQuestionSet, difficultyPlan, questionFromId } from '../lib/questions/index.js'
+import { generateQuestion, hasQuestions, buildQuestionSet, difficultyPlan, questionFromId } from '../lib/questions/index.js'
 import { TOPICS } from '../lib/syllabus.js'
 
 describe('question generators', () => {
-  it('every syllabus topic has a generator', () => {
-    for (const t of TOPICS) expect(GENERATORS[t.id], t.id).toBeTypeOf('function')
+  // Current Affairs has no built-in source (no live news feed) — questions come from the Admin panel.
+  const covered = TOPICS.filter((t) => t.id !== 'current-affairs')
+  it('every syllabus topic except Current Affairs has a generator or a question bank', () => {
+    for (const t of covered) expect(hasQuestions(t.id), t.id).toBe(true)
   })
-  for (const t of TOPICS) {
+  for (const t of covered) {
     it(`${t.id} produces valid questions`, () => {
       for (const d of ['easy', 'medium', 'hard']) {
         for (let s = 0; s < 120; s++) {

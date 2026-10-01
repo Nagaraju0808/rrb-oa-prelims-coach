@@ -3,7 +3,7 @@ import { useStore } from '../lib/store.jsx'
 import { PHASES } from '../lib/plan.js'
 import { dayStatus, resolveDay } from '../lib/engine.js'
 import { fmtDate } from '../lib/dates.js'
-import { topicName } from '../lib/syllabus.js'
+import { topicName, SUBJECTS } from '../lib/syllabus.js'
 import { PageHeader, StatusBadge, ProgressBar, cx } from '../components/ui.jsx'
 import DayRecord from '../components/DayRecord.jsx'
 
@@ -41,7 +41,10 @@ export default function PlanPage() {
                         <span className="font-bold text-slate-900 dark:text-white">Day {d.day_no}</span>
                         <span className="text-xs text-slate-500">{fmtDate(d.date)}</span>
                       </div>
-                      <div className="mt-1 text-sm">{d.is_mock_day ? '🏆 Full Prelims Mock + analysis' : <>🧠 {topicName(r.reasoning_topic)}<br />🔢 {topicName(r.numerical_topic)}</>}</div>
+                      <div className="mt-1 space-y-0.5 text-sm">
+                        {d.is_mock_day && <div className="font-semibold">🏆 Full {d.mock_type === 'mains' ? 'Mains' : 'Prelims'} Mock + analysis</div>}
+                        {SUBJECTS.filter((sb) => !(d.is_mock_day && (sb.id === 'reasoning' || sb.id === 'numerical'))).map((sb) => <div key={sb.id} className="truncate">{sb.icon} {topicName(r[`${sb.id}_topic`])}</div>)}
+                      </div>
                       <div className="mt-2 flex items-center gap-2">
                         <StatusBadge status={st.status === 'in_progress' ? 'in_progress' : st.status} />
                         {st.testDone && <span className="chip bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">Test {st.testAccuracy}%</span>}

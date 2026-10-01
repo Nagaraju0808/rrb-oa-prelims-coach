@@ -3,7 +3,7 @@ import { Check } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { allTopics, speedStats } from '../lib/engine.js'
 import { fmtDate } from '../lib/dates.js'
-import { EXAM } from '../lib/syllabus.js'
+import { EXAM, MAINS, subjectById } from '../lib/syllabus.js'
 import { PageHeader, ProgressBar, StatusBadge, accColor, cx } from '../components/ui.jsx'
 
 const STAGES = [['learned', 'Learning'], ['practiced', 'Practice'], ['revised', 'Revision'], ['tested', 'Test']]
@@ -25,14 +25,15 @@ export function StageTrack({ s }) {
 
 export default function SubjectPage({ subject }) {
   const { state, stats } = useStore()
-  const topics = allTopics(state.content).filter((t) => t.subject === subject)
+  const topics = allTopics(state.content, state.profile?.language).filter((t) => t.subject === subject)
   const sp = speedStats(state)[subject]
-  const sec = EXAM.sections.find((s) => s.subject === subject)
+  const pre = EXAM.sections.find((s) => s.subject === subject), mains = MAINS.sections.find((s) => s.subject === subject)
+  const info = [pre && `Prelims ${pre.questions} Q · ${pre.marks} marks · ${pre.minutes} min`, mains && `Mains ${mains.questions} Q · ${mains.marks} marks · ${mains.minutes} min`].filter(Boolean).join('  |  ')
   const rows = topics.map((t) => stats[t.id]).filter(Boolean)
   const overall = Math.round(rows.reduce((s, r) => s + r.completion, 0) / (rows.length || 1))
   return (
     <div className="fade-in">
-      <PageHeader title={subject === 'reasoning' ? '🧠 Reasoning Ability' : '🔢 Numerical Ability'} subtitle={`Prelims: ${sec.questions} questions · ${sec.marks} marks · ${sec.minutes} minutes (target ${Math.round(sp.targetSec)}s per question)`}>
+      <PageHeader title={`${subjectById[subject].icon} ${subjectById[subject].name}`} subtitle={`${info} · target ${Math.round(sp.targetSec)}s per question`}>
         <Link to={`/practice?subject=${subject}`} className="btn-primary">Subject Test (40 Q)</Link>
       </PageHeader>
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -4,19 +4,55 @@ import {
   getPlan, topicStats, createTopicRevisions, overview, earnedAchievements, ACHIEVEMENTS, scoreAttempt, dayStatus,
   MISTAKE_REVISION_OFFSETS, nextStudyDate, sessionId, dailyTestId,
 } from './engine.js'
-import { STUDY_SLOTS } from './plan.js'
+import { STUDY_SLOTS, topicField } from './plan.js'
+import { SUBJECT_IDS } from './syllabus.js'
 
-const VERSION = 1
+const VERSION = 1 // storage key version — kept stable so existing progress is never orphaned
+const SCHEMA = 2 // data layout version (2 = integrated 5-subject timetable)
 const emptyContent = () => ({ topics: [], questions: [], templates: [], resources: [], planOverrides: {}, hiddenTopics: [] })
 export const emptyState = () => ({
-  version: VERSION, profile: null, sessions: {}, attempts: {}, mistakes: {}, revisions: {}, logs: {}, achievements: {}, notifications: {}, days: {},
+  version: VERSION, schema: SCHEMA, profile: null, sessions: {}, attempts: {}, mistakes: {}, revisions: {}, logs: {}, achievements: {}, notifications: {}, days: {},
   content: emptyContent(), firedReminders: {},
 })
 
 const storageKey = (uid) => `rrb_state_v${VERSION}:${uid}`
 export const STORAGE_KEY = storageKey('local')
 export const BACKUP_KEY = 'rrb_state_backup'
-const parse = (raw) => ({ ...emptyState(), ...JSON.parse(raw) })
+const parse = (raw) => migrate({ ...emptyState(), schema: 1, ...JSON.parse(raw) })
+
+/**
+ * Schema 1 → 2: the old timetable had separate concept + practice sessions for Reasoning and Numerical
+ * (r-concept / r-practice / n-concept / n-practice). They are merged into one topic session per subject,
+ * keeping time spent, question counts, completion and links from tests — no progress is lost.
+ */
+export function migrate(st) {
+  if ((st.schema || 1) >= SCHEMA) return st
+  const map = { 'r-concept': 'reasoning', 'r-practice': 'reasoning', 'n-concept': 'numerical', 'n-practice': 'numerical' }
+  const sessions = {}
+  const moved = {}
+  for (const ses of Object.values(st.sessions || {})) {
+    const key = map[ses.slot_key]
+    if (!key) { sessions[ses.id] = ses; continue }
+    const id = `s-${ses.day_no}-${key}`
+    moved[ses.id] = id
+    const cur = sessions[id] || { id, day_no: ses.day_no, date: ses.date, slot_key: key, subject: key, topic_id: ses.topic_id, status: 'not_started',
+      elapsed_sec: 0, attempted: 0, correct: 0, manual_attempted: 0, manual_correct: 0, practice_attempted: 0, practice_correct: 0, steps: {} }
+    const isConcept = ses.slot_key.endsWith('concept')
+    if (isConcept) cur.topic_id = ses.topic_id
+    for (const k of ['elapsed_sec', 'attempted', 'correct', 'manual_attempted', 'manual_correct', 'practice_attempted', 'practice_correct']) cur[k] = (cur[k] || 0) + (ses[k] || 0)
+    const rank = { completed: 4, in_progress: 3, paused: 2, missed: 1, not_started: 0 }
+    if (isConcept && ses.status === 'completed') { cur.status = 'completed'; cur.completed_at = ses.completed_at; cur.steps.learn = true; cur.steps.shortcuts = true }
+    else if (cur.status !== 'completed' && (rank[ses.status] || 0) > (rank[cur.status] || 0)) cur.status = ses.status === 'completed' ? 'in_progress' : ses.status
+    if (!isConcept && ses.status === 'completed') cur.steps.practice = true
+    if (ses.status === 'in_progress') { cur.status = 'paused'; cur.run_started_at = null }
+    cur.started_at = cur.started_at || ses.started_at
+    cur.updated_at = new Date().toISOString()
+    sessions[id] = cur
+  }
+  const attempts = { ...st.attempts }
+  for (const a of Object.values(attempts)) if (a.session_id && moved[a.session_id]) attempts[a.id] = { ...a, session_id: moved[a.session_id] }
+  return { ...st, sessions, attempts, schema: SCHEMA }
+}
 
 /** Load saved progress. Never throws; unreadable data is preserved under a separate key instead of being overwritten. */
 function load(uid) {
@@ -44,6 +80,28 @@ function applyRevise(m, correct) {
   m.last_result = correct ? 'correct' : 'wrong'
   m.mastered = correct && m.revised_dates.length >= 2 && (m.revision_dates || []).every((x) => m.revised_dates.includes(x) || x > d)
   m.updated_at = iso()
+}
+
+/** Complete a session: stop its timer, store counts, log time, schedule spaced revisions for a learned topic. */
+function finishSession(s, o, { attempted, correct, notes } = {}) {
+  const ts = iso()
+  if (o.status === 'in_progress' && o.run_started_at) o.elapsed_sec += Math.max(0, (Date.parse(ts) - Date.parse(o.run_started_at)) / 1000)
+  o.elapsed_sec = Math.round(o.elapsed_sec || 0)
+  o.status = 'completed'; o.run_started_at = null; o.completed_at = ts; o.updated_at = ts
+  if (notes !== undefined) o.notes = notes
+  // Questions solved outside the app (books/PDFs) are logged manually; in-app practice is counted automatically.
+  if (attempted !== undefined) {
+    o.manual_attempted = Math.max(0, +attempted || 0)
+    o.manual_correct = Math.min(o.manual_attempted, Math.max(0, +correct || 0))
+  }
+  o.attempted = (o.practice_attempted || 0) + (o.manual_attempted || 0)
+  o.correct = (o.practice_correct || 0) + (o.manual_correct || 0)
+  const lid = `log-${o.id}`
+  s.logs[lid] = { id: lid, session_id: o.id, date: o.date, minutes: Math.round(o.elapsed_sec / 60), subject: o.subject, topic_id: o.topic_id, updated_at: ts }
+  // A completed subject topic → spaced revisions on Day +1, +4, +7, +14, +30.
+  if (SUBJECT_IDS.includes(o.slot_key) && o.topic_id && o.topic_id !== 'mixed') {
+    for (const r of createTopicRevisions(s, o.topic_id, o.date)) s.revisions[r.id] = { ...r, updated_at: ts }
+  }
 }
 
 const Ctx = createContext(null)
@@ -127,7 +185,7 @@ export function StoreProvider({ userId = 'local', children }) {
     mutate((s) => {
       const ts = iso()
       for (const { id, d, slot, s: old } of missing) {
-        s.sessions[id] = { id, day_no: d.day_no, date: d.date, slot_key: slot.key, subject: slot.subject, topic_id: old?.topic_id || (slot.subject === 'reasoning' ? d.reasoning_topic : slot.subject === 'numerical' ? d.numerical_topic : slot.key),
+        s.sessions[id] = { id, day_no: d.day_no, date: d.date, slot_key: slot.key, subject: slot.subject, topic_id: old?.topic_id || d[topicField(slot.subject)] || slot.key,
           attempted: 0, correct: 0, elapsed_sec: 0, ...old, status: 'missed', run_started_at: null, updated_at: ts }
       }
       for (const k of newAch) {
@@ -145,7 +203,7 @@ export function StoreProvider({ userId = 'local', children }) {
     completeOnboarding(p) {
       mutate((s) => {
         s.profile = { id: userId, role: s.profile?.role || 'student', theme: 'system', language: 'en', notifications: { enabled: true, sound: false },
-          daily_test: { count: 30, mix: { easy: 30, medium: 50, hard: 20 } }, study_start_min: 600, target_exam: 'CRP RRBs XV — Office Assistant (Multipurpose) Prelims',
+          daily_test: { count: 30, mix: { easy: 30, medium: 50, hard: 20 } }, study_start_min: 600, target_exam: 'CRP RRBs XV — Office Assistant (Multipurpose)',
           ...s.profile, ...p, created_at: s.profile?.created_at || iso(), updated_at: iso() }
       })
     },
@@ -173,35 +231,35 @@ export function StoreProvider({ userId = 'local', children }) {
     resumeSession(id) {
       mutate((s) => { const o = s.sessions[id]; if (o) { o.status = 'in_progress'; o.run_started_at = iso(); o.updated_at = iso() } })
     },
-    completeSession(id, { attempted = 0, correct = 0, notes = '' } = {}) {
+    completeSession(id, { attempted, correct, notes } = {}) {
+      mutate((s) => { if (s.sessions[id]) finishSession(s, s.sessions[id], { attempted, correct, notes }) })
+    },
+    /** Mark a step of the topic flow (learn, shortcuts, practice, revision, quiz). Opening a topic starts its session timer. */
+    setStep(rec, step, value = true) {
       mutate((s) => {
-        const o = s.sessions[id]; if (!o) return
         const ts = iso()
-        if (o.status === 'in_progress' && o.run_started_at) o.elapsed_sec += Math.max(0, (Date.parse(ts) - Date.parse(o.run_started_at)) / 1000)
-        o.elapsed_sec = Math.round(o.elapsed_sec)
-        o.status = 'completed'; o.run_started_at = null; o.completed_at = ts; o.updated_at = ts; o.notes = notes
-        // Questions solved outside the app (books/PDFs) are logged manually; in-app practice is counted automatically.
-        o.manual_attempted = Math.max(0, +attempted || 0)
-        o.manual_correct = Math.min(o.manual_attempted, Math.max(0, +correct || 0))
-        o.attempted = (o.practice_attempted || 0) + o.manual_attempted
-        o.correct = (o.practice_correct || 0) + o.manual_correct
-        const lid = `log-${id}`
-        s.logs[lid] = { id: lid, session_id: id, date: o.date, minutes: Math.round(o.elapsed_sec / 60), subject: o.subject, topic_id: o.topic_id, updated_at: ts }
-        // Learning day → schedule spaced revisions (Day 1, 4, 7, 14, 30).
-        if (o.slot_key.endsWith('concept') && o.topic_id && o.topic_id !== 'mixed') {
-          for (const r of createTopicRevisions(s, o.topic_id, o.date)) s.revisions[r.id] = { ...r, updated_at: ts }
+        let o = s.sessions[rec.id]
+        if (!o || o.status === 'not_started' || o.status === 'missed') {
+          for (const x of Object.values(s.sessions)) if (x.status === 'in_progress' && x.id !== rec.id) {
+            x.elapsed_sec += Math.max(0, (Date.parse(ts) - Date.parse(x.run_started_at)) / 1000); x.status = 'paused'; x.run_started_at = null; x.updated_at = ts
+          }
+          o = s.sessions[rec.id] = { attempted: 0, correct: 0, elapsed_sec: 0, started_at: ts, ...o, id: rec.id, day_no: rec.day_no, date: rec.date, slot_key: rec.slot.key,
+            subject: rec.slot.subject, topic_id: o?.topic_id || rec.topic_id, goal: rec.goal, status: 'in_progress', run_started_at: ts }
         }
+        o.steps = { ...(o.steps || {}), [step]: value }
+        o.updated_at = ts
       })
     },
-    resetSession(id) { mutate((s) => { const o = s.sessions[id]; if (o) Object.assign(o, { status: 'not_started', elapsed_sec: 0, attempted: 0, correct: 0, manual_attempted: 0, manual_correct: 0, run_started_at: null, completed_at: null, updated_at: iso() }) }) },
+    /** Undo a completion — keeps time, steps and question counts (only the completed flag is removed). */
+    resetSession(id) { mutate((s) => { const o = s.sessions[id]; if (o) Object.assign(o, { status: 'paused', run_started_at: null, completed_at: null, updated_at: iso() }) }) },
 
     /** Create an attempt record. questions: full question objects. */
-    createAttempt({ id = uid('att'), kind, title, questions, duration_sec, sections = null, day_no = null, session_id = null, negative = 0, topics = [] }) {
+    createAttempt({ id = uid('att'), kind, title, questions, duration_sec, sections = null, day_no = null, session_id = null, negative = 0, topics = [], marks = null, return_to = null, mock_type = null }) {
       const ts = iso()
-      const meta = Object.fromEntries(questions.map((q) => [q.id, { topic: q.topic, subject: q.subject, answer: q.answer, difficulty: q.difficulty }]))
+      const meta = Object.fromEntries(questions.map((q) => [q.id, { topic: q.topic, subject: q.subject, subtopic: q.subtopic, answer: q.answer, difficulty: q.difficulty }]))
       mutate((s) => {
         s.attempts[id] = { id, kind, title, day_no, date: todayISO(), topics, question_ids: questions.map((q) => q.id), meta, sections, session_id, duration_sec, negative,
-          answers: {}, started_at: ts, submitted_at: null, updated_at: ts }
+          marks, return_to, mock_type, answers: {}, started_at: ts, submitted_at: null, updated_at: ts }
       })
       return id
     },
@@ -214,7 +272,7 @@ export function StoreProvider({ userId = 'local', children }) {
         const ts = iso()
         Object.assign(a, { submitted_at: ts, auto_submitted: auto, time_taken_sec: Math.round(timeTaken ?? (Date.parse(ts) - Date.parse(a.started_at)) / 1000),
           score: res.score, max: res.max, correct: res.correct, wrong: res.wrong, skipped: res.skipped, accuracy: res.accuracy,
-          by_subject: res.bySubject, by_topic: res.byTopic, meta: res.meta, updated_at: ts })
+          by_subject: res.bySubject, by_topic: res.byTopic, by_subtopic: res.bySubtopic, meta: res.meta, updated_at: ts })
         if (a.kind === 'mistakes') {
           for (const m of Object.values(s.mistakes)) if (a.meta[m.question_id]) applyRevise(m, a.answers[m.question_id]?.choice === a.meta[m.question_id].answer)
         }
@@ -226,7 +284,23 @@ export function StoreProvider({ userId = 'local', children }) {
           o.practice_correct = linked.reduce((t, x) => t + x.correct, 0)
           o.attempted = o.practice_attempted + (o.manual_attempted || 0)
           o.correct = o.practice_correct + (o.manual_correct || 0)
+          o.steps = { ...(o.steps || {}), ...(a.kind === 'revision-quiz' ? { quiz: true } : { practice: true }) }
           o.updated_at = ts
+        }
+        if (a.kind === 'revision-quiz') {
+          // A revision quiz counts as revising its topics: due revisions are marked done, and weak results get an extra revision in 2 days.
+          const d = todayISO()
+          for (const t of a.topics || []) {
+            for (const r of Object.values(s.revisions)) if (r.topic_id === t && r.status === 'pending' && r.due_date <= d) Object.assign(r, { status: 'done', completed_at: ts, updated_at: ts })
+            const tr = res.byTopic[t]
+            if (tr && tr.total && (tr.correct / tr.total) * 100 < 60) {
+              const due = nextStudyDate(addDays(d, 2)), rid = `rev-${t}-extra-${due}`
+              if (!s.revisions[rid]) s.revisions[rid] = { id: rid, kind: 'weak', topic_id: t, source_date: d, step: 0, label: 'Extra revision (low quiz score)', due_date: due, status: 'pending', completed_at: null, updated_at: ts }
+            }
+          }
+          // Revision Quiz is the last step of the topic flow → the topic (session) is completed.
+          const o = a.session_id && s.sessions[a.session_id]
+          if (o && o.status !== 'completed') finishSession(s, o, {})
         }
       })
     },

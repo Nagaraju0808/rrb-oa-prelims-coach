@@ -6,6 +6,7 @@ import { dayStatus, speedStats, weakTopics, strongTopics } from '../lib/engine.j
 import { STUDY_SLOTS } from '../lib/plan.js'
 import { weekStart, fmtDate } from '../lib/dates.js'
 import { PageHeader, Empty, ProgressBar, accColor, cx } from '../components/ui.jsx'
+import { SUBJECT_IDS, subjectById } from '../lib/syllabus.js'
 
 const AX = { fontSize: 11, stroke: '#94a3b8' }
 const GRID = <CartesianGrid strokeDasharray="3 3" stroke="#94a3b833" vertical={false} />
@@ -52,13 +53,13 @@ export default function Analytics() {
 
       <section>
         <h2 className="h2 mb-3">Speed tracker</h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          {['reasoning', 'numerical'].map((k) => {
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {SUBJECT_IDS.map((k) => {
             const s = sp[k]
             const pct = s.avgSec ? Math.min(100, (s.targetSec / s.avgSec) * 100) : 0
             return (
               <div key={k} className="card">
-                <div className="mb-2 font-bold">{k === 'reasoning' ? '🧠 Reasoning' : '🔢 Numerical Ability'}</div>
+                <div className="mb-2 font-bold">{subjectById[k].icon} {subjectById[k].name}</div>
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div><div className="text-xs text-slate-500">Questions / min</div><b>{s.qpm || '—'}</b> <span className="text-xs text-slate-500">target {s.targetQpm}</span></div>
                   <div><div className="text-xs text-slate-500">Avg time / Q</div><b>{s.avgSec ? `${s.avgSec}s` : '—'}</b> <span className="text-xs text-slate-500">target {s.targetSec}s</span></div>
@@ -66,7 +67,7 @@ export default function Analytics() {
                 </div>
                 <div className="mt-3 text-xs text-slate-500">Speed vs exam target</div>
                 <ProgressBar value={pct} color={pct >= 100 ? 'bg-emerald-500' : pct >= 75 ? 'bg-amber-500' : 'bg-rose-500'} />
-                <p className="mt-1 text-xs text-slate-500">Based on your last 60 answered questions. Exam pace: 40 Q in {k === 'reasoning' ? 25 : 20} minutes.</p>
+                <p className="mt-1 text-xs text-slate-500">Based on your last 60 answered questions. Exam pace: {s.targetSec}s per question (official sectional time ÷ 40).</p>
               </div>
             )
           })}

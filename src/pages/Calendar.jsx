@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { dayStatus, weeklyReport } from '../lib/engine.js'
 import { toISO, addDays, isSunday, fmtDate, parseISO } from '../lib/dates.js'
 import { PageHeader, Modal, cx, accColor, SubjectChip } from '../components/ui.jsx'
+import { SUBJECT_IDS } from '../lib/syllabus.js'
 import DayRecord from '../components/DayRecord.jsx'
 
 const CELL = {
@@ -74,15 +75,16 @@ export default function CalendarPage() {
             {[['Study days completed', `${report.studyDays}/${report.days.length || 6}`], ['Study hours', `${report.hours}h`], ['Questions solved', report.questions], ['Daily Tests', `${report.dailyTests}/${report.days.length || 6}`], ['Avg accuracy', `${report.accuracy}%`]].map(([l, v]) => (
               <div key={l} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60"><div className="text-xs text-slate-500">{l}</div><div className="text-lg font-bold">{v}</div></div>))}
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {['reasoning', 'numerical'].map((k) => (
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {SUBJECT_IDS.map((k) => (
               <div key={k} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800"><SubjectChip subject={k} />
-                <div className="mt-2 text-sm">{report[k].attempted} questions · <b className={accColor(report[k].accuracy)}>{report[k].attempted ? `${report[k].accuracy}%` : '—'}</b> accuracy</div></div>))}
+                <div className="mt-2 text-sm">{report.subjects[k].attempted} questions · <b className={accColor(report.subjects[k].accuracy)}>{report.subjects[k].attempted ? `${report.subjects[k].accuracy}%` : '—'}</b> accuracy</div></div>))}
           </div>
           <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
             <div><div className="mb-1 font-bold">⚠️ Weak topics</div>{report.weak.length ? report.weak.map((w) => <div key={w.id}>{w.name} — {w.recentAccuracy}%</div>) : <span className="muted">None detected</span>}</div>
             <div><div className="mb-1 font-bold">💪 Strong topics</div>{report.strong.length ? report.strong.map((w) => <div key={w.id}>{w.name} — {w.recentAccuracy}%</div>) : <span className="muted">Keep practising to build strengths</span>}</div>
           </div>
+          <Link to="/daily-test" className="btn-primary mt-4" onClick={() => setWeek(null)}>Take this week’s Weekly Test</Link>
           <div className="mt-4 rounded-xl bg-blue-50 p-3 text-sm dark:bg-blue-950/50"><b>Next week’s recommended focus:</b> {report.nextFocus.length ? report.nextFocus.join(', ') : 'Follow the plan and keep your streak.'}</div>
           <div className="mt-3 flex flex-wrap gap-1.5">{report.days.map(({ day, st }) => <span key={day.day_no} className={cx('chip', CELL[st.status])}>Day {day.day_no}: {st.status.replace('_', ' ')}</span>)}</div>
         </Modal>

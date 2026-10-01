@@ -79,10 +79,16 @@ export function StatusBadge({ status, label }) {
   return <span className={cx('chip', c)}>{label || l}</span>
 }
 
+const SUBJECT_CHIPS = {
+  reasoning: ['🧠 Reasoning', 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300'],
+  numerical: ['🔢 Numerical', 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'],
+  language: ['🗣️ English/Hindi', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'],
+  ga: ['📰 GA', 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'],
+  computer: ['💻 Computer', 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'],
+}
 export function SubjectChip({ subject }) {
-  if (subject === 'reasoning') return <span className="chip bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300">🧠 Reasoning</span>
-  if (subject === 'numerical') return <span className="chip bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300">🔢 Numerical</span>
-  return <span className="chip bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">🎯 Mixed</span>
+  const [l, c] = SUBJECT_CHIPS[subject] || ['🎯 Mixed', 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300']
+  return <span className={cx('chip', c)}>{l}</span>
 }
 
 export function Modal({ open, onClose, title, children, wide = false, footer }) {

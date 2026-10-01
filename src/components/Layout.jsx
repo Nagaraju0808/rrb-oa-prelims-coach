@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarRange, ListChecks, Brain, Calculator, FileClock, ClipboardList, Trophy, BookX, RotateCcw, BarChart3,
-  CalendarDays, Award, Settings, Shield, Menu, X, Bell, Moon, Sun, HardDrive, Play,
+  CalendarDays, Award, Settings, Shield, Menu, X, Bell, Moon, Sun, HardDrive, Play, Languages, Newspaper, Monitor,
 } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { cx } from './ui.jsx'
 import { fmtTime } from '../lib/dates.js'
-import { DEFAULT_START_MIN, testUnlockMin } from '../lib/plan.js'
+import { DEFAULT_START_MIN, testSuggestedMin } from '../lib/plan.js'
+import { useTodayInfo } from '../lib/hooks.js'
 import { applyTheme, getTheme } from '../lib/theme.js'
 
 export const NAV = [
@@ -16,6 +17,9 @@ export const NAV = [
   { to: '/today', label: "Today's Plan", icon: ListChecks },
   { to: '/reasoning', label: 'Reasoning', icon: Brain },
   { to: '/numerical', label: 'Numerical Ability', icon: Calculator },
+  { to: '/language', label: 'English / Hindi', icon: Languages },
+  { to: '/ga', label: 'General Awareness', icon: Newspaper },
+  { to: '/computer', label: 'Computer', icon: Monitor },
   { to: '/daily-test', label: 'Daily Test', icon: FileClock },
   { to: '/practice', label: 'Practice Tests', icon: ClipboardList },
   { to: '/mock-tests', label: 'Mock Tests', icon: Trophy },
@@ -27,6 +31,17 @@ export const NAV = [
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
+function useReadyReminder() {
+  const { state, today, actions } = useStore()
+  const info = useTodayInfo()
+  useEffect(() => {
+    if (!info.day || !info.ready?.ready || info.testAttempt?.submitted_at || state.profile?.notifications?.enabled === false) return
+    const key = `${today}:ready`
+    if (state.firedReminders?.[key]) return
+    actions.notify('🎯 Daily Test Ready', 'Today’s preparation is complete — start the Daily Test now.', key)
+  }, [info.ready?.ready, info.day, info.testAttempt, today, state.firedReminders, state.profile, actions])
+}
+
 function useReminders() {
   const { state, today, nowMin, plan, actions } = useStore()
   useEffect(() => {
@@ -34,12 +49,11 @@ function useReminders() {
     if (!p || p.notifications?.enabled === false) return
     const day = plan.find((d) => d.date === today)
     if (!day) return
-    const s = p.study_start_min ?? DEFAULT_START_MIN, t = testUnlockMin(s), end = s + 480
+    const s = p.study_start_min ?? DEFAULT_START_MIN, t = testSuggestedMin(s), end = s + 480
     const list = [
       { at: s - 10, key: 'start', title: '⏰ Study starts soon', body: 'Your study session starts in 10 minutes.' },
-      { at: t - 30, key: 'revise', title: '📘 30 minutes left', body: "Complete today's revision before the Daily Test." },
-      { at: t - 5, key: 'test-soon', title: '📝 Daily Test in 5 minutes', body: `Daily Test starts at ${fmtTime(t)}.` },
-      { at: t, key: 'test-ready', title: '🟢 Your Daily Test is ready', body: 'It is based on today’s topics — 30 questions, 30 minutes.' },
+      { at: t - 60, key: 'revise', title: '🔄 Revision time', body: "Revise today's topics and take the revision quiz before the Daily Test." },
+      { at: t, key: 'test-suggested', title: '🎯 Daily Test time', body: `Suggested time for the Daily Test (${fmtTime(t)}). Finish any remaining topics, then start it.` },
       { at: end, key: 'done', title: '🎉 Day complete', body: "Today's preparation is complete!" },
     ]
     for (const r of list) {
@@ -55,20 +69,22 @@ function useReminders() {
 }
 
 export default function Layout() {
-  const { state, ov, nowMin, actions } = useStore()
+  const { state, ov, actions } = useStore()
+  const tinfo = useTodayInfo()
   const [open, setOpen] = useState(false)
   const [bell, setBell] = useState(false)
   const [theme, setTheme] = useState(getTheme())
   const loc = useLocation()
   const nav = useNavigate()
   useReminders()
+  useReadyReminder()
   useEffect(() => setOpen(false), [loc.pathname])
   const notes = Object.values(state.notifications || {}).sort((a, b) => (a.at < b.at ? 1 : -1))
   const unread = notes.filter((n) => !n.read).length
   const isDark = theme === 'dark' || (theme === 'system' && document.documentElement.classList.contains('dark'))
   const toggleTheme = () => { const t = isDark ? 'light' : 'dark'; applyTheme(t); setTheme(t); actions.updateProfile({ theme: t }) }
   const items = [...NAV, { to: '/admin', label: 'Admin Panel', icon: Shield }]
-  const testUnlocked = nowMin >= testUnlockMin(state.profile?.study_start_min ?? DEFAULT_START_MIN)
+  const testReady = !!tinfo.ready?.ready && !tinfo.testAttempt?.submitted_at
 
   const NavList = (
     <nav className="flex flex-col gap-0.5" aria-label="Main">
@@ -77,7 +93,7 @@ export default function Layout() {
           className={({ isActive }) => cx('flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
             isActive ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800')}>
           <Icon size={18} /> <span className="flex-1">{label}</span>
-          {to === '/daily-test' && <span className={cx('h-2 w-2 rounded-full', testUnlocked ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-slate-600')} aria-hidden />}
+          {to === '/daily-test' && <span className={cx('h-2 w-2 rounded-full', testReady ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-slate-600')} title={testReady ? 'Daily Test ready' : undefined} aria-hidden />}
         </NavLink>
       ))}
     </nav>
@@ -138,7 +154,7 @@ export default function Layout() {
         </main>
         {/* Mobile bottom bar */}
         <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/95" aria-label="Quick">
-          {[NAV[0], NAV[2], NAV[5], NAV[8], NAV[10]].map(({ to, label, icon: Icon, end }) => (
+          {['/', '/today', '/daily-test', '/mistakes', '/analytics'].map((to) => NAV.find((n) => n.to === to)).map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} className={({ isActive }) => cx('flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold', isActive ? 'text-brand-600 dark:text-blue-400' : 'text-slate-500')}>
               <Icon size={20} />{label.replace("Today's Plan", 'Today').replace('Mistake Book', 'Mistakes')}
             </NavLink>
@@ -154,8 +170,8 @@ function Brand() {
     <div className="flex items-center gap-2 px-2">
       <img src="icon.svg" alt="" className="h-9 w-9" />
       <div className="leading-tight">
-        <div className="text-sm font-bold text-slate-900 dark:text-white">RRB OA Prelims</div>
-        <div className="text-[11px] text-slate-500">60-Day Study Coach</div>
+        <div className="text-sm font-bold text-slate-900 dark:text-white">RRB OA Coach</div>
+        <div className="text-[11px] text-slate-500">Prelims + Mains · 60 days</div>
       </div>
     </div>
   )

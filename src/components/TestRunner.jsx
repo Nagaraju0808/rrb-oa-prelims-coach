@@ -5,11 +5,14 @@ import { fmtDuration, now } from '../lib/dates.js'
 import { Modal, cx, SubjectChip } from './ui.jsx'
 import { topicName } from '../lib/syllabus.js'
 
+/** Render **bold** markers used in sentence-improvement questions. */
+export const rich = (text) => String(text).split(/(\*\*[^*]+\*\*)/g).map((part, i) => (part.startsWith('**') && part.endsWith('**') ? <b key={i} className="underline decoration-2 underline-offset-2">{part.slice(2, -2)}</b> : part))
+
 export function QuestionBody({ q }) {
   return (
     <div>
       {q.data && <DataView data={q.data} />}
-      <p className="text-[15px] leading-relaxed whitespace-pre-line text-slate-800 dark:text-slate-100">{q.stem}</p>
+      <p className="text-[15px] leading-relaxed whitespace-pre-line text-slate-800 dark:text-slate-100">{rich(q.stem)}</p>
     </div>
   )
 }

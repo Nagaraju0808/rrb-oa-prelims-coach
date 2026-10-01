@@ -1,8 +1,8 @@
 import { useNavigate, Link } from 'react-router-dom'
-import { Check, RotateCcw, PenLine, Undo2 } from 'lucide-react'
+import { Check, RotateCcw, Brain, Undo2 } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { dueRevisions, dueMistakes, weakTopics, REVISION_OFFSETS } from '../lib/engine.js'
-import { createPractice, createMistakeQuiz } from '../lib/tests.js'
+import { createRevisionQuiz, createMistakeQuiz } from '../lib/tests.js'
 import { fmtDate, addDays } from '../lib/dates.js'
 import { topicName } from '../lib/syllabus.js'
 import { PageHeader, Empty, SubjectChip, accColor, cx } from '../components/ui.jsx'
@@ -15,7 +15,7 @@ export default function Revision() {
   const upcoming = Object.values(state.revisions).filter((r) => r.status === 'pending' && r.due_date > today && r.due_date <= addDays(today, 14)).sort((a, b) => (a.due_date < b.due_date ? -1 : 1))
   const doneToday = Object.values(state.revisions).filter((r) => r.status === 'done' && r.completed_at?.slice(0, 10) === today)
   const weak = weakTopics(stats).slice(0, 4)
-  const practice = (topicId) => nav(`/test/${createPractice({ state, actions, topics: [topicId], count: 10, title: `Revision — ${topicName(topicId)}` })}`)
+  const practice = (topicId) => nav(`/test/${createRevisionQuiz({ state, actions, topics: [topicId], title: `Revision Quiz — ${topicName(topicId)}`, return_to: '/revision' })}`)
 
   return (
     <div className="fade-in space-y-5">
@@ -32,7 +32,7 @@ export default function Revision() {
                 <span className="text-xs text-slate-500">{r.label}</span>
                 {r.due_date < today && <span className="chip bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">Overdue since {fmtDate(r.due_date, { day: 'numeric', month: 'short' })}</span>}
                 {s?.totalAttempted > 0 && <span className={cx('text-xs font-bold', accColor(s.recentAccuracy))}>{s.recentAccuracy}%</span>}
-                <button className="btn-secondary !py-1.5" onClick={() => practice(r.topic_id)}><PenLine size={14} />10 Q</button>
+                <button className="btn-secondary !py-1.5" onClick={() => practice(r.topic_id)}><Brain size={14} />Revision Quiz</button>
                 <button className="btn-success !py-1.5" onClick={() => actions.completeRevision(r.id)}><Check size={14} />Mark revised</button>
               </li>
             )

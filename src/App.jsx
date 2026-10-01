@@ -34,6 +34,9 @@ function Routed() {
           <Route path="today" element={<Today />} />
           <Route path="reasoning" element={<SubjectPage subject="reasoning" />} />
           <Route path="numerical" element={<SubjectPage subject="numerical" />} />
+          <Route path="language" element={<SubjectPage subject="language" />} />
+          <Route path="ga" element={<SubjectPage subject="ga" />} />
+          <Route path="computer" element={<SubjectPage subject="computer" />} />
           <Route path="topic/:id" element={<TopicPage />} />
           <Route path="daily-test" element={<DailyTest />} />
           <Route path="practice" element={<Practice />} />

@@ -1,0 +1,116 @@
+// Computer Knowledge guides.
+
+export default {
+  'computer-fundamentals': {
+    concept: 'What a computer is, its history and generations, its main parts and the number systems it uses.',
+    shortcuts: [
+      ['Generations', '1st — vacuum tubes; 2nd — transistors; 3rd — integrated circuits (ICs); 4th — microprocessors (VLSI); 5th — artificial intelligence (ULSI). Memory hook: “V-T-I-M-A”.'],
+      ['CPU parts', 'ALU does arithmetic and logic; Control Unit directs operations; registers are the fastest storage inside the CPU.'],
+      ['Number systems', 'Binary base 2, octal base 8, decimal base 10, hexadecimal base 16 (A = 10 … F = 15).'],
+      ['Binary ↔ decimal', 'To decimal: add the place values (1, 2, 4, 8, 16 …) where the bit is 1. To binary: divide by 2 repeatedly and read the remainders bottom-up.'],
+      ['People', 'Charles Babbage — “father of the computer” (Analytical Engine). ENIAC — first general-purpose electronic computer.'],
+    ],
+    formulas: ['1 nibble = 4 bits; 1 byte = 8 bits; 1 KB = 1024 bytes', 'Hex digit = 4 bits; octal digit = 3 bits'],
+    quick: ['For conversions, group binary digits in 3s (octal) or 4s (hex) from the right.'],
+    traps: ['1 KB is 1024 bytes (binary), not 1000.'],
+  },
+  'computer-hardware': {
+    concept: 'Physical parts of a computer: input devices, output devices, ports and storage devices.',
+    shortcuts: [
+      ['Input devices', 'Keyboard, mouse, scanner, microphone, webcam, light pen, joystick, barcode reader, MICR, OCR, OMR.'],
+      ['Output devices', 'Monitor, printer, plotter, speaker, projector.'],
+      ['Both input & output', 'Touch screen, modem, network card.'],
+      ['Bank-specific readers', 'MICR reads the magnetic-ink numbers on cheques; OMR reads marked bubbles (exam sheets); OCR reads printed text.'],
+      ['Printers', 'Impact (dot-matrix) vs non-impact (inkjet, laser). Laser printers are fastest for office use.'],
+    ],
+    formulas: ['USB = Universal Serial Bus; HDMI carries both video and audio.'],
+    quick: ['Ask: does it put data in, take data out, or both?'],
+    traps: ['A plotter is an output device even though it “draws”.'],
+  },
+  'computer-memory': {
+    concept: 'Where data is stored: registers, cache, primary memory (RAM/ROM) and secondary storage.',
+    shortcuts: [
+      ['Speed ladder', 'Registers > cache > RAM > SSD > hard disk > optical disc/tape (fastest to slowest; cost per GB falls in the same order).'],
+      ['RAM vs ROM', 'RAM is volatile (loses data when power is off) and read-write. ROM is non-volatile and stores firmware such as BIOS.'],
+      ['ROM types', 'PROM — programmed once; EPROM — erased with ultraviolet light; EEPROM — erased electrically (flash memory is a type of EEPROM).'],
+      ['RAM types', 'DRAM needs refreshing (main memory); SRAM does not (used for cache).'],
+      ['Units ladder', 'Bit → Nibble → Byte → KB → MB → GB → TB → PB (each step from KB is × 1024).'],
+    ],
+    formulas: ['Cache sits between the CPU and RAM to reduce waiting time.'],
+    quick: ['Classify memory as primary/secondary and volatile/non-volatile.'],
+    traps: ['Cache is faster than RAM but much smaller.'],
+  },
+  'software-os': {
+    concept: 'Programs that run a computer: system software (OS, utilities, drivers, translators) and application software.',
+    shortcuts: [
+      ['System vs application', 'System software runs the computer (Windows, Linux, device drivers). Application software does user tasks (MS Word, browsers, Tally).'],
+      ['OS functions', 'Manages processes, memory, files, devices and security; provides the user interface.'],
+      ['Translators', 'Compiler — translates the whole program at once. Interpreter — line by line. Assembler — assembly language to machine code.'],
+      ['Booting', 'Cold boot = starting from power-off; warm boot = restart. BIOS (in ROM) starts the boot process.'],
+    ],
+    formulas: ['Open-source examples: Linux, Android (based on Linux).', 'GUI = Graphical User Interface; CLI = Command Line Interface.'],
+    quick: ['Ask: does it help the computer run (system) or help the user do work (application)?'],
+    traps: ['An antivirus is utility (system) software, not application software in most exam keys.'],
+  },
+  'ms-office': {
+    concept: 'Everyday office software: Word (documents), Excel (spreadsheets) and PowerPoint (presentations).',
+    shortcuts: [
+      ['File extensions', 'Word .docx, Excel .xlsx, PowerPoint .pptx (older versions .doc, .xls, .ppt).'],
+      ['Excel basics', 'A cell address is column letter + row number (B5). Formulas start with “=”. SUM, AVERAGE, COUNT, MAX, MIN, IF are the most asked functions.'],
+      ['Word shortcuts', 'Ctrl+B bold, Ctrl+I italic, Ctrl+U underline, Ctrl+E centre, Ctrl+L left, Ctrl+R right, Ctrl+J justify, F7 spelling & grammar.'],
+      ['Excel shortcuts', 'F2 edit cell; Ctrl+; insert today’s date; Ctrl+Shift+; insert current time.'],
+      ['PowerPoint', 'F5 starts the slide show from the beginning; Shift+F5 from the current slide.'],
+    ],
+    formulas: ['$A$1 = absolute reference (does not change when copied); A1 = relative reference.'],
+    quick: ['Link each shortcut to its first letter where possible (B = Bold, I = Italic, U = Underline, E = cEntre).'],
+    traps: ['Ctrl+R in Word right-aligns text, but in browsers it reloads the page.'],
+  },
+  'internet-networking': {
+    concept: 'How computers connect and communicate: networks, protocols, the web and email.',
+    shortcuts: [
+      ['Network size', 'PAN (personal) < LAN (building) < MAN (city) < WAN (country/world; the internet is the largest WAN).'],
+      ['Protocols', 'HTTP/HTTPS — web pages (HTTPS is encrypted); FTP — file transfer; SMTP — sending email; POP3/IMAP — receiving email; TCP/IP — basic internet protocol suite; DNS — converts domain names to IP addresses.'],
+      ['Devices', 'Modem — modulator/demodulator; router — connects different networks; switch — connects devices within a LAN (smarter than a hub).'],
+      ['Addresses', 'IPv4 is 32-bit; IPv6 is 128-bit. A URL is the address of a web page.'],
+      ['Email', 'CC — copy visible to all; BCC — hidden copy.'],
+    ],
+    formulas: ['Topologies: bus, star, ring, mesh, tree. In a star topology all devices connect to a central hub/switch.'],
+    quick: ['Connect each protocol to its job (web, file, send mail, receive mail).'],
+    traps: ['The World Wide Web (Tim Berners-Lee, 1989) runs ON the internet; they are not the same thing.'],
+  },
+  'computer-security': {
+    concept: 'Threats to computers and accounts, and how to protect against them — especially in banking.',
+    shortcuts: [
+      ['Malware family', 'Virus — attaches to files and needs a host. Worm — spreads on its own across networks. Trojan — disguised as useful software. Ransomware — locks data and demands payment. Spyware — secretly collects information.'],
+      ['Social engineering', 'Phishing — fake emails/websites; vishing — voice calls; smishing — SMS. All try to steal passwords, PINs or OTPs.'],
+      ['Defences', 'Firewall filters network traffic; antivirus detects malware; encryption scrambles data; two-factor authentication adds a second check (e.g. OTP).'],
+      ['Bank rule', 'A bank never asks a customer for a PIN, password, CVV or OTP.'],
+    ],
+    formulas: ['Strong password = long + mix of upper/lower case, numbers and symbols, not reused.'],
+    quick: ['Identify the attack by its channel: email, phone, SMS or software.'],
+    traps: ['A firewall does not remove viruses — that is the antivirus’s job.'],
+  },
+  'keyboard-shortcuts': {
+    concept: 'Common Windows/Office keyboard shortcuts and computer abbreviations.',
+    shortcuts: [
+      ['Editing', 'Ctrl+C copy, Ctrl+X cut, Ctrl+V paste, Ctrl+Z undo, Ctrl+Y redo, Ctrl+A select all.'],
+      ['Files', 'Ctrl+N new, Ctrl+O open, Ctrl+S save, Ctrl+P print, F12 Save As (Office).'],
+      ['Windows', 'Alt+F4 close window; Alt+Tab switch windows; Win+D show desktop; Win+L lock; Win+E File Explorer; Ctrl+Shift+Esc Task Manager; F2 rename.'],
+      ['Abbreviations', 'CPU, ALU, RAM, ROM, BIOS, URL, HTTP, LAN, WAN, OCR, OMR, MICR, PDF (Portable Document Format), GUI.'],
+    ],
+    formulas: ['Ctrl+F find; Ctrl+H replace; F1 help; F5 refresh (browser) / slide show (PowerPoint).'],
+    quick: ['Practise each shortcut once on a real computer — muscle memory beats rote learning.'],
+    traps: ['Ctrl+Y means redo in most programs, not “yes”.'],
+  },
+  'dbms-basics': {
+    concept: 'Databases store data in tables; a DBMS lets you create, read, update and delete that data.',
+    shortcuts: [
+      ['Table terms', 'Row = record/tuple; column = field/attribute.'],
+      ['Keys', 'Primary key — unique and not empty for each row. Foreign key — refers to the primary key of another table. Candidate key — any column that could be the primary key.'],
+      ['SQL groups', 'DDL — CREATE, ALTER, DROP (structure). DML — SELECT, INSERT, UPDATE, DELETE (data).'],
+    ],
+    formulas: ['RDBMS = relational DBMS (data in related tables) — examples: MySQL, Oracle, SQL Server.'],
+    quick: ['Decide whether a command changes structure (DDL) or data (DML).'],
+    traps: ['DELETE removes rows; DROP removes the whole table.'],
+  },
+}

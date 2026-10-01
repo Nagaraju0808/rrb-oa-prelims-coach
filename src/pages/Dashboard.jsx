@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Play, Clock, BookOpen, Target, FileClock, Trophy, Flame, CalendarCheck, Lock, Unlock, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react'
+import { Play, Clock, BookOpen, Target, FileClock, Trophy, Flame, CalendarCheck, ListChecks, Unlock, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { useTodayInfo } from '../lib/hooks.js'
-import { recommend, weeklyReport } from '../lib/engine.js'
+import { recommend, weeklyReport, TOPIC_STEPS } from '../lib/engine.js'
 import { fmtTime, isSunday, fmtDate } from '../lib/dates.js'
-import { topicName } from '../lib/syllabus.js'
+import { topicName, subjectById, SUBJECT_IDS } from '../lib/syllabus.js'
 import { phaseOf, TOTAL_STUDY_DAYS } from '../lib/plan.js'
 import { Stat, ProgressBar, Ring, Modal, StatusBadge, accColor, cx } from '../components/ui.jsx'
 
@@ -23,7 +23,7 @@ export default function Dashboard() {
   const sunday = isSunday(today)
   const weekly = useMemo(() => (sunday ? weeklyReport(state, plan, today, stats) : null), [sunday, state, plan, today, stats])
   const s = info.sessions || []
-  const prog = (keys) => { const xs = s.filter((x) => keys.includes(x.slot.key)); return xs.length ? Math.round((xs.filter((x) => x.status === 'completed').length / xs.length) * 100) : 0 }
+  const prog = (key) => { const x = s.find((y) => y.slot.key === key); if (!x) return 0; if (x.status === 'completed') return 100; return Math.round((TOPIC_STEPS.filter((st) => x.steps?.[st.key]).length / TOPIC_STEPS.length) * 100) }
   const phase = info.day ? phaseOf(info.day.day_no) : null
 
   const startNext = () => {
@@ -60,16 +60,16 @@ export default function Dashboard() {
           <div className="grid gap-4 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
             {info.next ? (
               <div>
-                {info.lastDone && <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-emerald-600"><CheckCircle2 size={16} />{info.lastDone.slot.label.split(' — ')[0]} completed.</div>}
+                {info.lastDone && <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-emerald-600"><CheckCircle2 size={16} />{info.lastDone.slot.label} completed.</div>}
                 <div className="text-xs font-bold tracking-wide text-slate-500 uppercase">{info.lastDone ? 'Next' : 'Next Task'}</div>
-                <div className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{info.next.slot.subject === 'reasoning' ? '🧠' : info.next.slot.subject === 'numerical' ? '🔢' : '🎯'} {info.next.slot.label.split(' — ')[0]} — {info.next.slot.key === 'revision' ? 'Revision' : topicName(info.next.topic_id)}</div>
+                <div className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{subjectById[info.next.slot.subject]?.icon || '🎯'} {info.next.slot.label} — {info.next.slot.key === 'revision' ? 'Revision' : topicName(info.next.topic_id)}</div>
                 <div className="text-sm text-slate-500">{fmtTime(info.next.times.start)} – {fmtTime(info.next.times.end)} · {info.next.goal}</div>
               </div>
             ) : (
               <div>
-                <div className="text-xs font-bold tracking-wide text-slate-500 uppercase">📝 Today’s Test</div>
-                <div className="mt-1 text-lg font-bold">{fmtTime(info.unlockMin)} – {fmtTime(info.unlockMin + 30)}</div>
-                <div className="text-sm text-slate-500">Based on today’s topics: {topicName(info.rday.reasoning_topic)} & {topicName(info.rday.numerical_topic)}</div>
+                <div className="text-xs font-bold tracking-wide text-slate-500 uppercase">🎯 Today’s Test</div>
+                <div className="mt-1 text-lg font-bold">{info.testAttempt?.submitted_at ? 'Completed — great work!' : info.ready.ready ? 'Daily Test Ready — start whenever you like' : 'Finish today’s plan, then take the test'}</div>
+                <div className="text-sm text-slate-500">Based on today’s topics · suggested from {fmtTime(info.suggestedMin)}</div>
               </div>
             )}
             {info.next ? <button className="btn-primary !py-3" onClick={startNext}><Play size={16} />{info.next.status === 'not_started' ? 'START SESSION' : 'RESUME SESSION'}</button>
@@ -103,13 +103,13 @@ export default function Dashboard() {
           <div className="mb-3 flex items-center justify-between"><h2 className="h2">Today’s Progress</h2><Link to="/today" className="text-sm font-semibold text-brand-600 hover:underline">Open plan →</Link></div>
           {info.day ? (
             <div className="space-y-3">
-              {[['🧠 Reasoning', ['r-concept', 'r-practice'], 'bg-violet-500'], ['🔢 Numerical Ability', ['n-concept', 'n-practice'], 'bg-sky-500'], ['🎯 Weak topic practice', ['weak'], 'bg-amber-500'], ['📘 Revision', ['revision'], 'bg-emerald-500']].map(([l, k, c]) => (
+              {[...SUBJECT_IDS.map((k) => [`${subjectById[k].icon} ${subjectById[k].short}`, k, 'bg-brand-600']), ['🔄 Revision', 'revision', 'bg-emerald-500'], ['🎯 Practice / weak topics', 'weak', 'bg-amber-500']].map(([l, k, c]) => (
                 <div key={l}><div className="mb-1 flex justify-between text-sm"><span className="font-medium">{l}</span><span className="text-slate-500">{prog(k)}%</span></div><ProgressBar value={prog(k)} color={c} /></div>
               ))}
-              <div className={cx('mt-2 flex items-center gap-3 rounded-xl p-3 text-sm font-semibold', info.testAttempt?.submitted_at ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : info.testUnlocked ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300')}>
+              <div className={cx('mt-2 flex items-center gap-3 rounded-xl p-3 text-sm font-semibold', info.testAttempt?.submitted_at ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : info.ready.ready ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300')}>
                 {info.testAttempt?.submitted_at ? <><CheckCircle2 size={18} />Daily Test completed — {info.testAttempt.score}/{info.testAttempt.max} ({info.testAttempt.accuracy}%)</>
-                  : info.testUnlocked ? <><Unlock size={18} />🟢 Daily Test is now available<Link to="/daily-test" className="ml-auto btn-success !py-1">Start</Link></>
-                    : <><Lock size={18} />🔒 Daily Test will unlock at {fmtTime(info.unlockMin)}</>}
+                  : info.ready.ready ? <><Unlock size={18} />🎯 Daily Test Ready<Link to="/daily-test" className="ml-auto btn-success !py-1">Start</Link></>
+                    : <><ListChecks size={18} />Today’s preparation {info.ready.pct}% — the Daily Test is ready once you finish ({info.ready.remaining.length} left)<Link to="/daily-test" className="ml-auto btn-secondary !py-1">Details</Link></>}
               </div>
             </div>
           ) : <p className="muted">No study sessions today.</p>}
@@ -160,7 +160,7 @@ export default function Dashboard() {
               {plan.filter((d) => d.date > today).slice(0, 4).map((d) => (
                 <li key={d.day_no} className="flex items-center gap-3"><CalendarCheck size={16} className="text-slate-400" />
                   <span className="w-24 shrink-0 text-slate-500">{fmtDate(d.date)}</span>
-                  <span className="truncate">Day {d.day_no}: {d.is_mock_day ? 'Full Mock + analysis' : `${topicName(d.reasoning_topic)} · ${topicName(d.numerical_topic)}`}</span>
+                  <span className="truncate">Day {d.day_no}: {d.is_mock_day ? 'Full Mock + analysis' : SUBJECT_IDS.map((k) => topicName(d[`${k}_topic`])).join(' · ')}</span>
                 </li>))}
             </ul>
           </section>

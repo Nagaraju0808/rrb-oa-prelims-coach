@@ -1,0 +1,128 @@
+// English and Hindi language topic guides (Mains test 4a / 4b).
+
+export default {
+  'reading-comprehension': {
+    concept: 'Read a passage and answer questions on its main idea, facts, inferences, vocabulary and tone.',
+    shortcuts: [
+      ['Questions first', 'Skim the questions before the passage so you read with a purpose.'],
+      ['Keyword location', 'Fact questions: find the keyword from the question in the passage and read 1–2 lines around it.'],
+      ['Extreme options', 'Options with “always”, “never”, “only”, “all” are usually wrong unless the passage says exactly that.'],
+      ['Main idea', 'The first and last paragraphs usually contain the central idea.'],
+      ['Vocabulary in context', 'Replace the word with each option in the sentence; the meaning must fit the passage, not just the dictionary.'],
+    ],
+    formulas: ['Inference = what the passage strongly suggests, not what it states word for word.', 'Tone words: critical, optimistic, neutral, sarcastic, analytical.'],
+    quick: ['Read questions.', 'Read the passage once, marking key lines.', 'Answer fact questions, then inference, then main idea.'],
+    traps: ['Do not answer from your own knowledge.'],
+  },
+  'cloze-test': {
+    concept: 'A paragraph with blanks — choose words that fit both grammar and meaning.',
+    shortcuts: [
+      ['Theme first', 'Read the whole paragraph once to understand its tone and topic.'],
+      ['Grammar filter', 'Remove options that break tense, number, article or preposition rules.'],
+      ['Connectors', 'However/but/although = contrast; therefore/thus/hence = result; moreover/furthermore = addition.'],
+      ['Collocations', 'Some words go together: “make a decision”, “take a step”, “pay attention”, “raise a question”.'],
+    ],
+    formulas: ['Blank before a noun often needs an adjective; before an adjective often an adverb.'],
+    quick: ['Read the paragraph.', 'Fill easy blanks first.', 'Re-read the completed paragraph.'],
+    traps: ['A word can be grammatical but wrong in tone (positive vs negative).'],
+  },
+  'error-detection': {
+    concept: 'Find the part of the sentence that contains a grammatical error.',
+    shortcuts: [
+      ['Each/every/either/neither', 'Take a singular verb: “Each of the boys IS present.”'],
+      ['One of the …', '“One of the + plural noun + singular verb”: “One of the books IS missing.”'],
+      ['The number of / A number of', '“The number of students IS large.” “A number of students ARE absent.”'],
+      ['Either…or / neither…nor', 'The verb agrees with the nearer subject.'],
+      ['As well as / along with / together with', 'The verb agrees with the FIRST subject: “The manager, along with his staff, IS present.”'],
+      ['Since vs for', '“Since” + point of time, “for” + period; both usually with the perfect tense.'],
+      ['Fixed pairs', '“Hardly/Scarcely … when”, “No sooner … than”, “Lest … should”, “Not only … but also”.'],
+      ['Latin comparatives', 'Superior, inferior, senior, junior, prior, prefer take “to”, not “than”.'],
+    ],
+    formulas: ['“An” before a vowel SOUND: an hour, an MBA; “a” before a consonant sound: a university, a one-day match.', '“Unless” already means “if not” — never use “not” after it.', '“Comprise” takes no “of”: The team comprises five members.'],
+    quick: ['Find the subject and verb.', 'Check agreement and tense.', 'Check articles, prepositions and pronouns.', 'If nothing is wrong, choose “No error”.'],
+    traps: ['A long phrase between subject and verb hides the real subject.'],
+  },
+  'sentence-improvement': {
+    concept: 'Replace the highlighted part with the option that makes the sentence correct while keeping its meaning.',
+    shortcuts: [
+      ['Conditionals', 'If + present, will + V1. If + past, would + V1. If + had + V3, would have + V3.'],
+      ['Wish / as if', 'Use the past form for present wishes: “I wish I WERE rich.”'],
+      ['Parallelism', 'Items joined by “and/or” must have the same form: “reading, writing and speaking”.'],
+      ['Redundancy', 'Avoid repeated meanings: “return back”, “repeat again”, “cancel out completely”.'],
+    ],
+    formulas: ['It is high time + past tense: “It is high time we LEFT.”'],
+    quick: ['Read the whole sentence.', 'Find what is wrong in the highlighted part.', 'Choose the option that fixes it with no new error.'],
+    traps: ['Choose “No improvement” only when the original is fully correct.'],
+  },
+  'fill-blanks': {
+    concept: 'Choose the word(s) that correctly complete the sentence.',
+    shortcuts: [
+      ['Fixed prepositions', 'interested in, afraid of, depend on, good at, angry with (a person), angry at (a thing), different from, married to, capable of.'],
+      ['Clue words', '“Although/despite” signal contrast; “because/since” signal reason; “and” signals a similar idea.'],
+      ['Double blanks', 'Test the easier blank first; eliminate every option where that word fails.'],
+    ],
+    formulas: ['Phrasal verbs: look after (take care), look into (investigate), put off (postpone), call off (cancel), give up (quit).'],
+    quick: ['Predict the type of word needed.', 'Eliminate by grammar.', 'Choose by meaning.'],
+    traps: ['Two options may be synonyms — then neither is usually correct.'],
+  },
+  'para-jumbles': {
+    concept: 'Rearrange jumbled sentences into a logical paragraph.',
+    shortcuts: [
+      ['Opening sentence', 'It introduces the topic and does not start with a pronoun (he, it, they), “the”, or a connector (however, therefore).'],
+      ['Mandatory pairs', 'A pronoun or “this/these/such” refers back to a noun in the previous sentence — link those two.'],
+      ['Chronology', 'Dates, “first/then/finally” and cause → effect give the order.'],
+      ['Closing sentence', 'Conclusion words: thus, hence, therefore, in short.'],
+    ],
+    formulas: ['General statement → explanation → example → conclusion is the most common order.'],
+    quick: ['Find the opener.', 'Find one or two fixed pairs.', 'Check the options — usually only one contains your pair.'],
+    traps: ['Use the options to save time; do not build the full order from scratch.'],
+  },
+  vocabulary: {
+    concept: 'Synonyms, antonyms, word usage and correct spellings.',
+    shortcuts: [
+      ['Roots', 'bene = good (benefit), mal = bad (malice), chron = time (chronic), phil = love (philanthropy), anti/contra = against, omni = all.'],
+      ['Negative prefixes', 'un-, in-, im-, ir-, il-, dis-, mis-, non- usually make an opposite: legal → illegal, regular → irregular.'],
+      ['Word charge', 'Decide if the word is positive or negative; the synonym has the same charge, the antonym the opposite.'],
+      ['Spelling rules', '“i before e except after c” (receive, believe) — with exceptions like “seize”, “weird”.'],
+    ],
+    formulas: ['Common pairs: abundant ↔ scarce, candid = frank, diligent = hard-working, frugal ↔ extravagant, obscure ↔ clear.'],
+    quick: ['Recall the word in a sentence.', 'Decide positive/negative.', 'Eliminate options of the wrong charge.'],
+    traps: ['Look-alike words: affect (verb) / effect (noun), principal / principle, stationary / stationery.'],
+  },
+  'idioms-phrases': {
+    concept: 'Fixed expressions whose meaning is figurative, not literal.',
+    shortcuts: [
+      ['Learn with a sentence', '“The trip was cancelled, but it was a blessing in disguise.”'],
+      ['Reject literal options', 'Options that just repeat the words literally are usually wrong.'],
+      ['High-frequency idioms', 'Break the ice = start a conversation; call it a day = stop working; once in a blue moon = very rarely; hit the nail on the head = be exactly right; spill the beans = reveal a secret; under the weather = slightly ill; beat around the bush = avoid the main point; cost an arm and a leg = very expensive.'],
+    ],
+    formulas: ['Phrasal verb meaning changes with the preposition: break down (stop working), break into (enter by force), break out (start suddenly).'],
+    quick: ['Read the idiom in context.', 'Choose the figurative meaning.'],
+    traps: ['Similar idioms can have opposite meanings — read every option.'],
+  },
+  'hindi-grammar': {
+    concept: 'हिन्दी व्याकरण: संधि, समास, लिंग, वचन और वाक्य शुद्धि से जुड़े प्रश्न।',
+    shortcuts: [
+      ['दीर्घ संधि', 'अ/आ + अ/आ = आ; इ/ई + इ/ई = ई; उ/ऊ + उ/ऊ = ऊ। उदाहरण: विद्या + आलय = विद्यालय।'],
+      ['गुण संधि', 'अ/आ + इ/ई = ए (देव + इंद्र = देवेंद्र); अ/आ + उ/ऊ = ओ (सूर्य + उदय = सूर्योदय)।'],
+      ['वृद्धि संधि', 'अ/आ + ए/ऐ = ऐ (सदा + एव = सदैव); अ/आ + ओ/औ = औ (वन + औषधि = वनौषधि)।'],
+      ['यण संधि', 'इ/ई + भिन्न स्वर = य (यदि + अपि = यद्यपि); उ/ऊ + भिन्न स्वर = व (सु + आगत = स्वागत)।'],
+      ['समास पहचान', 'पहला पद अव्यय → अव्ययीभाव (प्रतिदिन); पहला पद संख्या → द्विगु (त्रिलोक); दोनों पद प्रधान → द्वंद्व (माता-पिता); विशेषण-विशेष्य → कर्मधारय (नीलकमल); कारक चिह्न लुप्त → तत्पुरुष (राजपुत्र = राजा का पुत्र); अन्य पद प्रधान → बहुव्रीहि (दशानन = रावण)।'],
+    ],
+    formulas: ['संधि-विच्छेद: पहले शब्द के अंतिम और दूसरे के पहले वर्ण को अलग करें।', 'वचन: लड़का → लड़के, लड़की → लड़कियाँ, पुस्तक → पुस्तकें।'],
+    quick: ['विग्रह करें।', 'नियम मिलाएँ।', 'विकल्पों से जाँचें।'],
+    traps: ['एक ही शब्द में दो समास हो सकते हैं (जैसे नीलकंठ: कर्मधारय या बहुव्रीहि) — प्रश्न का संदर्भ देखें।'],
+  },
+  'hindi-vocabulary': {
+    concept: 'पर्यायवाची, विलोम, मुहावरे और वर्तनी से जुड़े प्रश्न।',
+    shortcuts: [
+      ['पर्यायवाची समूह', 'जल: नीर, वारि, अंबु, तोय; सूर्य: रवि, दिनकर, भास्कर, दिवाकर; पृथ्वी: धरा, भूमि, वसुधा, अवनि।'],
+      ['विलोम युग्म', 'आदि–अंत, उदय–अस्त, सुगम–दुर्गम, आयात–निर्यात, उत्थान–पतन, सजीव–निर्जीव।'],
+      ['मुहावरे', 'आँखों का तारा = बहुत प्यारा; नौ दो ग्यारह होना = भाग जाना; दाँतों तले उँगली दबाना = आश्चर्य करना; ईद का चाँद होना = बहुत दिनों बाद दिखाई देना।'],
+      ['वर्तनी', 'अनुस्वार/चंद्रबिंदु और ह्रस्व-दीर्घ मात्राओं पर ध्यान दें: “उज्ज्वल”, “आशीर्वाद”, “कवयित्री”।'],
+    ],
+    formulas: ['उपसर्ग से विलोम: मान–अपमान, यश–अपयश, आस्था–अनास्था।'],
+    quick: ['शब्द को वाक्य में रखकर अर्थ सोचें।', 'विकल्प हटाएँ।'],
+    traps: ['मुहावरे का शाब्दिक अर्थ वाला विकल्प प्रायः गलत होता है।'],
+  },
+}

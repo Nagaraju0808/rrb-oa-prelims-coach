@@ -13,7 +13,7 @@ export default function Onboarding() {
     name: state.profile?.name || '',
     start_date: isSunday(t) ? addDays(t, 1) : t,
     target_exam: EXAM.name + ' — Prelims',
-    study_start_min: 600, level: 'beginner', reasoning_confidence: 'average', numerical_confidence: 'average',
+    study_start_min: 600, level: 'beginner', reasoning_confidence: 'average', numerical_confidence: 'average', language: 'en',
   })
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v?.target ? v.target.value : v }))
   const dates = f.start_date ? studyDates(f.start_date) : []
@@ -25,7 +25,7 @@ export default function Onboarding() {
         <div className="mb-6 text-center">
           <img src="icon.svg" alt="" className="mx-auto mb-3 h-14 w-14" />
           <h1 className="h1">Welcome to Your 60-Day RRB Office Assistant Prelims Preparation</h1>
-          <p className="muted mt-2">Tell us a little about yourself — we’ll build a day-by-day plan (Mon–Sat, Sundays for weekly review).</p>
+          <p className="muted mt-2">Tell us a little about yourself — we’ll build one integrated day-by-day plan covering all five subjects (Mon–Sat, Sundays for weekly review).</p>
         </div>
         <form className="card space-y-5" onSubmit={(e) => { e.preventDefault(); if (valid) actions.completeOnboarding({ ...f, name: f.name.trim(), study_start_min: +f.study_start_min }) }}>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -48,6 +48,9 @@ export default function Onboarding() {
           </Field>
           <Field label="Numerical Ability confidence">
             <Segmented value={f.numerical_confidence} onChange={set('numerical_confidence')} options={[{ value: 'weak', label: 'Weak' }, { value: 'average', label: 'Average' }, { value: 'strong', label: 'Strong' }]} />
+          </Field>
+          <Field label="Language test (Mains)" hint="IBPS lets you choose English Language or Hindi Language in Mains. You can change this later in Settings.">
+            <Segmented value={f.language} onChange={set('language')} options={[{ value: 'en', label: 'English' }, { value: 'hi', label: 'हिन्दी Hindi' }]} />
           </Field>
           {dates.length > 0 && (
             <div className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-800/60">

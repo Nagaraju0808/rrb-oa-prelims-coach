@@ -5,7 +5,7 @@ import { useStore } from '../lib/store.jsx'
 import { allTopics } from '../lib/engine.js'
 import { createPractice } from '../lib/tests.js'
 import { fmtDate } from '../lib/dates.js'
-import { EXAM, topicName } from '../lib/syllabus.js'
+import { EXAM, MAINS, SUBJECTS, subjectById, topicName } from '../lib/syllabus.js'
 import { PageHeader, Tabs, Field, Segmented, accColor } from '../components/ui.jsx'
 
 const MIXES = { easy: { easy: 60, medium: 30, hard: 10 }, standard: { easy: 30, medium: 50, hard: 20 }, hard: { easy: 10, medium: 50, hard: 40 } }
@@ -14,7 +14,7 @@ export default function Practice() {
   const { state, actions } = useStore()
   const [params] = useSearchParams()
   const nav = useNavigate()
-  const topics = allTopics(state.content)
+  const topics = allTopics(state.content, state.profile?.language)
   const [tab, setTab] = useState(params.get('subject') ? 'subject' : params.get('mixed') ? 'mixed' : 'topic')
   const [topic, setTopic] = useState(params.get('topic') || topics[0].id)
   const [count, setCount] = useState(+params.get('count') || 20)
@@ -27,9 +27,9 @@ export default function Practice() {
   const start = () => {
     if (tab === 'topic') go({ topics: [topic], count, kind: 'topic', title: `Topic Test — ${topicName(topic)}` })
     else if (tab === 'subject') {
-      const sec = EXAM.sections.find((s) => s.subject === subject)
-      go({ topics: topics.filter((t) => t.subject === subject).map((t) => t.id), count: 40, kind: 'subject', title: `Subject Test — ${sec.name}`, minutes: sec.minutes })
-    } else go({ topics: topics.map((t) => t.id), count: 40, kind: 'mixed', title: 'Mixed Test — Reasoning + Numerical Ability', minutes: 45 })
+      const sec = EXAM.sections.find((s) => s.subject === subject) || MAINS.sections.find((s) => s.subject === subject)
+      go({ topics: topics.filter((t) => t.subject === subject).map((t) => t.id), count: 40, kind: 'subject', title: `Subject Test — ${subjectById[subject].name}`, minutes: sec.minutes })
+    } else go({ topics: topics.map((t) => t.id), count: 40, kind: 'mixed', title: 'Mixed Test — all five subjects', minutes: 40 })
   }
 
   return (
@@ -41,14 +41,14 @@ export default function Practice() {
           {tab === 'topic' && <>
             <Field label="Topic">
               <select className="input" value={topic} onChange={(e) => setTopic(e.target.value)}>
-                {['reasoning', 'numerical'].map((s) => <optgroup key={s} label={s === 'reasoning' ? 'Reasoning' : 'Numerical Ability'}>{topics.filter((t) => t.subject === s).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>)}
+{SUBJECTS.map((sb) => topics.some((t) => t.subject === sb.id) && <optgroup key={sb.id} label={sb.name}>{topics.filter((t) => t.subject === sb.id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>)}
               </select>
             </Field>
             <Field label="Questions"><Segmented value={count} onChange={setCount} options={[10, 20, 30].map((n) => ({ value: n, label: `${n} Q` }))} /></Field>
           </>}
-          {tab === 'subject' && <Field label="Subject" hint="40 questions in the official sectional time (25 min Reasoning / 20 min Numerical).">
-            <Segmented value={subject} onChange={setSubject} options={[{ value: 'reasoning', label: 'Reasoning' }, { value: 'numerical', label: 'Numerical' }]} /></Field>}
-          {tab === 'mixed' && <p className="muted sm:col-span-2">40 questions drawn from every Reasoning and Numerical Ability topic, 45 minutes.</p>}
+          {tab === 'subject' && <Field label="Subject" hint="40 questions in the official sectional time (Prelims for Reasoning/Numerical, Mains for the others).">
+            <select className="input" value={subject} onChange={(e) => setSubject(e.target.value)}>{SUBJECTS.map((sb) => <option key={sb.id} value={sb.id}>{sb.name}</option>)}</select></Field>}
+          {tab === 'mixed' && <p className="muted sm:col-span-2">40 questions drawn from every topic of all five subjects, 40 minutes.</p>}
           <Field label="Difficulty"><Segmented value={level} onChange={setLevel} options={[{ value: 'easy', label: 'Easier' }, { value: 'standard', label: 'Standard' }, { value: 'hard', label: 'Harder' }]} /></Field>
         </div>
         <button className="btn-primary mt-5" onClick={start}><Play size={16} />Start {tab === 'topic' ? `${count}-question Topic Test` : tab === 'subject' ? 'Subject Test' : 'Mixed Test'}</button>

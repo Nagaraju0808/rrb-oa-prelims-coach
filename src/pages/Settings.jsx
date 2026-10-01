@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Download, Upload, Lock, Bell, RotateCcw, Trash2, Save } from 'lucide-react'
+import { Download, Upload, CalendarClock, Bell, RotateCcw, Trash2, Save } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { ALLOWED_START_TIMES, SLOTS, slotTimes } from '../lib/plan.js'
 import { fmtTime, todayISO } from '../lib/dates.js'
@@ -49,9 +49,9 @@ export default function SettingsPage() {
             <input className="input" type="date" value={f.start_date} onChange={(e) => setF({ ...f, start_date: e.target.value })} /></Field>
           <Field label="Study hours" hint="The whole 8-hour block shifts together; the Daily Test always stays the final 30 minutes.">
             <select className="input" value={f.study_start_min} onChange={(e) => setF({ ...f, study_start_min: +e.target.value })}>
-              {ALLOWED_START_TIMES.map((m) => <option key={m} value={m}>{fmtTime(m)} – {fmtTime(m + 480)} (Daily Test {fmtTime(m + 450)})</option>)}</select></Field>
-          <Field label="Preferred language" hint="Version 1 questions and explanations are in English.">
-            <select className="input" value={f.language} onChange={(e) => setF({ ...f, language: e.target.value })}><option value="en">English</option><option value="hi">Hindi (हिन्दी) — coming later</option></select></Field>
+              {ALLOWED_START_TIMES.map((m) => <option key={m} value={m}>{fmtTime(m)} – {fmtTime(m + 480)} (Daily Test suggested from {fmtTime(m + 450)})</option>)}</select></Field>
+          <Field label="Language test (Mains)" hint={f.language !== (p.language || 'en') ? 'Saving switches the English/Hindi topics in your plan. Finished days keep their history.' : 'IBPS lets you choose English Language (4a) or Hindi Language (4b) in Mains.'}>
+            <select className="input" value={f.language} onChange={(e) => setF({ ...f, language: e.target.value })}><option value="en">English Language</option><option value="hi">Hindi Language (हिन्दी)</option></select></Field>
         </div>
         <Field label="Preparation level"><Segmented value={f.level} onChange={(v) => setF({ ...f, level: v })} options={['beginner', 'intermediate', 'advanced'].map((x) => ({ value: x, label: x[0].toUpperCase() + x.slice(1) }))} /></Field>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -69,12 +69,12 @@ export default function SettingsPage() {
       </div>
 
       <div className="card">
-        <div className="mb-2 flex items-center gap-2"><Lock size={16} className="text-slate-500" /><h2 className="h2">Daily timetable</h2></div>
-        <p className="muted mb-3">Fixed for Version 1. The Daily Test is locked as the final session and cannot be moved.</p>
+        <div className="mb-2 flex items-center gap-2"><CalendarClock size={16} className="text-slate-500" /><h2 className="h2">Daily timetable</h2></div>
+        <p className="muted mb-3">Integrated Prelims + Mains timetable. Times are a guide: the Daily Test is the last item of the day and becomes available as soon as today’s preparation is complete — it is never locked to a clock time.</p>
         <div className="grid gap-1 text-sm sm:grid-cols-2">
           {SLOTS.map((s) => { const t = slotTimes(s, +f.study_start_min); return (
             <div key={s.key} className={`flex gap-3 rounded-lg px-2 py-1 ${s.kind === 'test' ? 'bg-brand-50 font-bold text-brand-700 dark:bg-blue-950 dark:text-blue-300' : ''}`}>
-              <span className="w-36 text-slate-500">{fmtTime(t.start)} – {fmtTime(t.end)}</span><span>{s.label}{s.kind === 'test' && ' 🔒'}</span></div>) })}
+              <span className="w-36 text-slate-500">{fmtTime(t.start)} – {fmtTime(t.end)}</span><span>{s.label}{s.kind === 'test' && ' (suggested — opens when ready)'}{s.optional && ' (optional)'}</span></div>) })}
         </div>
       </div>
 
@@ -82,7 +82,7 @@ export default function SettingsPage() {
         <h2 className="h2 mb-2">Appearance & reminders</h2>
         <Field label="Theme"><Segmented value={theme} onChange={(t) => { setTheme(t); applyTheme(t) }} options={[{ value: 'light', label: '☀️ Light' }, { value: 'dark', label: '🌙 Dark' }, { value: 'system', label: '💻 System' }]} /></Field>
         <Toggle label="Study & Daily Test reminders" checked={p.notifications?.enabled !== false} onChange={(v) => actions.updateProfile({ notifications: { ...p.notifications, enabled: v } })} />
-        <p className="muted">Reminders: 10 min before study starts, 30 min before the test (revision), 5 min before, when the test unlocks, and at day end. They appear in the 🔔 bell while the app is open{perm === 'granted' ? ' and as device notifications' : ''}.</p>
+        <p className="muted">Reminders: 10 min before study starts, at revision time, at the suggested Daily Test time, when your Daily Test becomes ready, and at day end. They appear in the 🔔 bell while the app is open{perm === 'granted' ? ' and as device notifications' : ''}.</p>
         {perm !== 'granted' && perm !== 'unsupported' && <button className="btn-secondary mt-2" onClick={async () => setPerm(await Notification.requestPermission())}><Bell size={16} />Allow device notifications</button>}
         {perm === 'denied' && <p className="text-sm text-amber-600">Notifications are blocked in your browser settings for this site.</p>}
       </div>

@@ -1,13 +1,28 @@
 // Pure functions that derive progress, analytics and recommendations from stored records.
 import { addDays, diffDays, isSunday, weekStart } from './dates.js'
-import { STUDY_SLOTS, generatePlan, TOTAL_STUDY_DAYS, testUnlockMin, slotTimes, DEFAULT_START_MIN } from './plan.js'
-import { TOPICS, EXAM } from './syllabus.js'
+import {
+  STUDY_SLOTS, SUBJECT_SLOTS, REQUIRED_SLOTS, generatePlan, TOTAL_STUDY_DAYS, testSuggestedMin, slotTimes, DEFAULT_START_MIN, topicField, firstDayOfTopic,
+} from './plan.js'
+import { TOPICS, EXAM, MAINS, SUBJECT_IDS, subjectById, languageMatches } from './syllabus.js'
 import { questionFromId } from './questions/index.js'
 
 export const REVISION_OFFSETS = [1, 4, 7, 14, 30]
 export const MISTAKE_REVISION_OFFSETS = [1, 4, 7]
-export const TARGET_SEC = { reasoning: (EXAM.sections[0].minutes * 60) / EXAM.sections[0].questions, numerical: (EXAM.sections[1].minutes * 60) / EXAM.sections[1].questions }
+// Target seconds per question = official sectional time ÷ questions (Prelims for Reasoning/Numerical, Mains for the rest).
+const perQ = (sec) => (sec.minutes * 60) / sec.questions
+export const TARGET_SEC = {
+  reasoning: perQ(EXAM.sections[0]), numerical: perQ(EXAM.sections[1]),
+  ...Object.fromEntries(MAINS.sections.filter((s) => !['reasoning', 'numerical'].includes(s.subject)).map((s) => [s.subject, perQ(s)])),
+}
 export const MISTAKE_TYPES = ['Concept Error', 'Calculation Error', 'Silly Mistake', 'Time Pressure', 'Guessing', 'Other']
+/** Steps of the topic learning flow inside each subject session. */
+export const TOPIC_STEPS = [
+  { key: 'learn', label: 'Learn Concept', short: 'Learn', icon: '📚' },
+  { key: 'shortcuts', label: 'Shortcuts / Tricks', short: 'Shortcuts', icon: '💡' },
+  { key: 'practice', label: 'Practice Questions', short: 'Practice', icon: '📝' },
+  { key: 'revision', label: 'Revision', short: 'Revise', icon: '🔄' },
+  { key: 'quiz', label: 'Revision Quiz', short: 'Quiz', icon: '🧠' },
+]
 
 export const accuracy = (correct, attempted) => (attempted ? Math.round((correct / attempted) * 1000) / 10 : 0)
 export const nextStudyDate = (iso) => (isSunday(iso) ? addDays(iso, 1) : iso)
@@ -15,9 +30,9 @@ export const nextStudyDate = (iso) => (isSunday(iso) ? addDays(iso, 1) : iso)
 export const sessionId = (dayNo, slotKey) => `s-${dayNo}-${slotKey}`
 export const dailyTestId = (dayNo) => `daily-${dayNo}`
 
-export function allTopics(content) {
+export function allTopics(content, language) {
   const hidden = new Set(content?.hiddenTopics || [])
-  return [...TOPICS, ...(content?.topics || [])].filter((t) => !hidden.has(t.id))
+  return [...TOPICS, ...(content?.topics || [])].filter((t) => !hidden.has(t.id) && (!language || languageMatches(t, language)))
 }
 
 export function getPlan(state) {
@@ -27,10 +42,11 @@ export function getPlan(state) {
     level: state.profile.level,
     reasoningConfidence: state.profile.reasoning_confidence,
     numericalConfidence: state.profile.numerical_confidence,
+    language: state.profile.language,
   }, state.content?.planOverrides || {})
 }
 
-/** Every answered question across all submitted attempts: { qid, topic, subject, correct, time, date, attemptId, kind } */
+/** Every answered question across all submitted attempts. */
 export function answerLog(state) {
   const out = []
   for (const a of Object.values(state.attempts || {})) {
@@ -39,12 +55,14 @@ export function answerLog(state) {
       const ans = a.answers?.[qid]
       const meta = a.meta?.[qid]
       if (!meta) continue
-      out.push({ qid, topic: meta.topic, subject: meta.subject, correct: ans?.choice === meta.answer, skipped: ans?.choice == null,
+      out.push({ qid, topic: meta.topic, subject: meta.subject, subtopic: meta.subtopic, correct: ans?.choice === meta.answer, skipped: ans?.choice == null,
         time: ans?.time_sec || 0, date: a.date, attemptId: a.id, kind: a.kind })
     }
   }
   return out.sort((x, y) => (x.date < y.date ? -1 : 1))
 }
+
+const isSubjectSession = (ses) => SUBJECT_IDS.includes(ses.slot_key)
 
 /** Per-topic statistics, including learning → practice → revision → test stage tracking. */
 export function topicStats(state, plan = getPlan(state)) {
@@ -60,14 +78,16 @@ export function topicStats(state, plan = getPlan(state)) {
     s.attempted++; s.correct += x.correct ? 1 : 0; s.time += x.time
     s.recent.push(x.correct ? 1 : 0)
     if (!s.lastPracticed || x.date > s.lastPracticed) s.lastPracticed = x.date
-    if (['daily', 'mock', 'topic', 'subject', 'mixed'].includes(x.kind)) { s.testAttempted++; s.testCorrect += x.correct ? 1 : 0 }
+    if (['daily', 'mock', 'topic', 'subject', 'mixed', 'weekly'].includes(x.kind)) { s.testAttempted++; s.testCorrect += x.correct ? 1 : 0 }
   }
   for (const ses of Object.values(state.sessions || {})) {
     const s = stats[ses.topic_id]
-    if (!s || ses.status !== 'completed') continue
-    if (ses.slot_key.endsWith('concept')) s.learned = true
-    if (ses.slot_key.endsWith('practice') || ses.slot_key === 'weak') s.practiced = true
-    if (ses.manual_attempted) { // questions solved outside the app (in-app practice is already in the answer log)
+    if (!s) continue
+    const st = ses.steps || {}
+    if (st.learn || (isSubjectSession(ses) && ses.status === 'completed')) s.learned = true
+    if (st.practice || (ses.slot_key === 'weak' && ses.status === 'completed')) s.practiced = true
+    if (st.revision || st.quiz) s.revised = true
+    if (ses.status === 'completed' && ses.manual_attempted) { // questions solved outside the app (in-app practice is already in the answer log)
       s.sessionQs += ses.manual_attempted; s.sessionCorrect += ses.manual_correct || 0
       if (!s.lastPracticed || ses.date > s.lastPracticed) s.lastPracticed = ses.date
     }
@@ -87,8 +107,7 @@ export function topicStats(state, plan = getPlan(state)) {
     s.completion = 25 * [s.learned, s.practiced, s.revised, s.tested].filter(Boolean).length
     const pending = Object.values(state.revisions || {}).filter((r) => r.topic_id === s.id && r.status === 'pending').sort((a, b) => (a.due_date < b.due_date ? -1 : 1))
     s.revisionDue = pending[0]?.due_date || null
-    const plannedDay = plan.find((d) => d.reasoning_topic === s.id || d.numerical_topic === s.id)
-    s.firstPlannedDay = plannedDay?.day_no || null
+    s.firstPlannedDay = firstDayOfTopic(plan, s.id)?.day_no || null
     // Weakness score: recent accuracy (60%), speed vs target (20%), mistake density (20%).
     const target = TARGET_SEC[s.subject] || 36
     const speedScore = s.avgTime ? Math.max(0, Math.min(100, (target / s.avgTime) * 100)) : 100
@@ -109,26 +128,25 @@ export const strongTopics = (stats, subject) =>
 export function resolveDay(state, day, stats, plan = getPlan(state)) {
   const ses = (k) => state.sessions?.[sessionId(day.day_no, k)]
   const started = (k) => ses(k) && ses(k).status !== 'not_started'
-  let r = day.reasoning_topic, n = day.numerical_topic
-  if (day.adaptive && !day.is_mock_day && stats) {
-    const wr = weakTopics(stats, 'reasoning')[0], wn = weakTopics(stats, 'numerical')[0]
-    if (wr && !started('r-concept') && day.date > state._today) r = wr.id
-    if (wn && !started('n-concept') && day.date > state._today) n = wn.id
+  const out = { ...day }
+  for (const { subject } of SUBJECT_SLOTS) {
+    const f = topicField(subject)
+    if (day.adaptive && !(day.is_mock_day && (subject === 'reasoning' || subject === 'numerical')) && stats && !started(subject) && day.date > state._today) {
+      const w = weakTopics(stats, subject).find((x) => languageMatches({ subject, lang: TOPICS.find((t) => t.id === x.id)?.lang }, state.profile?.language))
+      if (w) out[f] = w.id
+    }
+    if (started(subject)) out[f] = ses(subject).topic_id
   }
-  if (started('r-concept')) r = ses('r-concept').topic_id
-  if (started('n-concept')) n = ses('n-concept').topic_id
-  // Weak/additional slot: carry forward an incomplete concept topic from the previous study day, else weakest topic.
+  // Practice / weak slot: carry forward an incomplete subject topic from the previous study day, else the weakest topic.
   let weak = null, weakReason = ''
   if (started('weak')) { weak = ses('weak').topic_id; weakReason = 'Selected when the session started' }
   else {
     const prev = plan.find((d) => d.day_no === day.day_no - 1)
-    if (prev) {
-      for (const k of ['r-concept', 'n-concept']) {
-        const ps = state.sessions?.[sessionId(prev.day_no, k)]
-        if (!ps || ps.status !== 'completed') {
-          const tid = ps?.topic_id || (k === 'r-concept' ? prev.reasoning_topic : prev.numerical_topic)
-          if (tid !== 'mixed' && prev.date < state._today) { weak = tid; weakReason = `Carried forward — Day ${prev.day_no} concept session was not completed`; break }
-        }
+    if (prev && prev.date < state._today) {
+      for (const { subject } of SUBJECT_SLOTS) {
+        const ps = state.sessions?.[sessionId(prev.day_no, subject)]
+        const tid = ps?.topic_id || prev[topicField(subject)]
+        if ((!ps || ps.status !== 'completed') && tid && tid !== 'mixed') { weak = tid; weakReason = `Carried forward — Day ${prev.day_no} ${subjectById[subject].short} topic was not completed`; break }
       }
     }
     if (!weak && stats) {
@@ -136,17 +154,17 @@ export function resolveDay(state, day, stats, plan = getPlan(state)) {
       if (w) { weak = w.id; weakReason = `Weak topic — recent accuracy ${w.recentAccuracy}%` }
     }
     if (!weak) {
-      weak = day.is_mock_day ? 'mixed' : (stats && (stats[r]?.accuracy ?? 100) <= (stats[n]?.accuracy ?? 100) ? r : n)
-      weakReason = day.is_mock_day ? 'Mock analysis — re-attempt today’s mock mistakes' : 'Additional practice on today’s topic'
+      weak = day.is_mock_day ? 'mixed' : out.reasoning_topic
+      weakReason = day.is_mock_day ? 'Mock analysis — re-attempt today’s mock mistakes' : 'Extra practice on today’s topics'
     }
   }
-  return { ...day, reasoning_topic: r, numerical_topic: n, weak_topic: weak, weak_reason: weakReason }
+  return { ...out, weak_topic: weak, weak_reason: weakReason }
 }
 
 export function sessionTopic(rday, slot) {
   if (slot.key === 'revision') return 'revision'
   if (slot.key === 'weak') return rday.weak_topic
-  return slot.subject === 'reasoning' ? rday.reasoning_topic : rday.numerical_topic
+  return rday[topicField(slot.subject)]
 }
 
 /** Session records for a day (stored or default "not started"). */
@@ -155,8 +173,22 @@ export function daySessions(state, rday) {
     const id = sessionId(rday.day_no, slot.key)
     const rec = state.sessions?.[id]
     const topic = rec?.topic_id || sessionTopic(rday, slot)
-    return { id, slot, day_no: rday.day_no, date: rday.date, topic_id: topic, status: 'not_started', attempted: 0, correct: 0, elapsed_sec: 0, ...rec }
+    return { id, slot, day_no: rday.day_no, date: rday.date, topic_id: topic, status: 'not_started', attempted: 0, correct: 0, elapsed_sec: 0, steps: {}, ...rec }
   })
+}
+
+/**
+ * Daily Test readiness — based on what has been completed today, never on the clock.
+ * Required: the five subject topics + today's revision. Practice / Weak Topics is recommended but optional.
+ */
+export function readiness(state, rday) {
+  const items = REQUIRED_SLOTS.map((slot) => {
+    const s = state.sessions?.[sessionId(rday.day_no, slot.key)]
+    return { key: slot.key, label: slot.label, subject: slot.subject, done: s?.status === 'completed' }
+  })
+  const done = items.filter((x) => x.done).length
+  return { items, done, total: items.length, pct: Math.round((done / items.length) * 100), ready: done === items.length,
+    completed: items.filter((x) => x.done), remaining: items.filter((x) => !x.done) }
 }
 
 export function dayStatus(state, day, today) {
@@ -167,8 +199,9 @@ export function dayStatus(state, day, today) {
   const testDone = !!test?.submitted_at
   const total = STUDY_SLOTS.length + 1
   const completedUnits = done + (testDone ? 1 : 0)
+  const requiredDone = REQUIRED_SLOTS.every((s) => state.sessions?.[sessionId(day.day_no, s.key)]?.status === 'completed')
   let status
-  if (completedUnits === total) status = 'completed'
+  if (requiredDone && testDone) status = 'completed'
   else if (day.date > today) status = 'upcoming'
   else if (completedUnits > 0 || any) status = day.date === today ? 'in_progress' : 'partial'
   else status = day.date === today ? 'today' : 'missed'
@@ -219,7 +252,7 @@ export function overview(state, plan, today, stats) {
   const answered = log.filter((x) => !x.skipped)
   const attempts = Object.values(state.attempts || {}).filter((a) => a.submitted_at)
   const daysDone = plan.filter((d) => dayStatus(state, d, today).status === 'completed').length
-  const curDay = plan.findLast?.((d) => d.date <= today) || [...plan].reverse().find((d) => d.date <= today)
+  const curDay = [...plan].reverse().find((d) => d.date <= today)
   return {
     currentDay: curDay ? curDay.day_no : 0,
     daysCompleted: daysDone,
@@ -238,7 +271,7 @@ export function overview(state, plan, today, stats) {
 export function speedStats(state) {
   const log = answerLog(state).filter((x) => !x.skipped)
   const out = {}
-  for (const sub of ['reasoning', 'numerical']) {
+  for (const sub of SUBJECT_IDS) {
     const xs = log.filter((x) => x.subject === sub)
     const recent = xs.slice(-60)
     const t = recent.reduce((s, x) => s + x.time, 0)
@@ -275,12 +308,16 @@ export function weeklyReport(state, plan, iso, stats) {
     questions: log.length + sessions.reduce((s, x) => s + (x.manual_attempted || 0), 0),
     dailyTests: ds.filter((x) => x.st.testDone).length,
     accuracy: accuracy(log.filter((x) => x.correct).length, log.length),
+    subjects: Object.fromEntries(SUBJECT_IDS.map((k) => [k, sub(k)])),
     reasoning: sub('reasoning'), numerical: sub('numerical'), weak, strong,
+    weekTopics: [...new Set(days.flatMap((d) => SUBJECT_SLOTS.map((s) => d[topicField(s.subject)])).filter((t) => t && t !== 'mixed'))],
     nextFocus: [...new Set([...weak.map((w) => w.name), ...nextDays.flatMap((d) => [d.reasoning_topic, d.numerical_topic]).filter((t) => t !== 'mixed').map((t) => stats?.[t]?.name || t)])].slice(0, 5),
   }
 }
 
-/** "What should I study now?" */
+const SUBJECT_ICON = Object.fromEntries(SUBJECT_IDS.map((k) => [k, subjectById[k].icon]))
+
+/** "What should I study now?" — guides, never blocks. The Daily Test is recommended as soon as the day's preparation is done. */
 export function recommend(state, plan, today, nowMin, stats) {
   const startMin = state.profile?.study_start_min ?? DEFAULT_START_MIN
   const day = plan.find((d) => d.date === today)
@@ -289,34 +326,36 @@ export function recommend(state, plan, today, nowMin, stats) {
   const mistakes = dueMistakes(state, today)
   const name = (id) => stats[id]?.name || id
   if (!day) {
-    if (isSunday(today)) return { kind: 'weekly', title: 'Sunday — Weekly Review', reason: 'Sunday is not a study day. Review this week’s report and plan next week.', action: { to: '/calendar?weekly=1', label: 'Open Weekly Report' } }
+    if (isSunday(today)) return { kind: 'weekly', title: 'Sunday — Weekly Review', reason: 'Sunday is not a study day. Review this week’s report and take the Weekly Test.', action: { to: '/calendar?weekly=1', label: 'Open Weekly Report' } }
     if (plan.length && today < plan[0].date) return { kind: 'wait', title: 'Your plan starts soon', reason: `Day 1 begins on ${plan[0].date}. Preview the 60-day plan meanwhile.`, action: { to: '/plan', label: 'View 60-Day Plan' } }
     return { kind: 'done', title: 'Plan complete — keep revising', reason: 'All 60 study days are over. Take mocks and revise weak topics until the exam.', action: { to: '/mock-tests', label: 'Take a Mock Test' } }
   }
   const rday = resolveDay(state, day, stats, plan)
   const sessions = daySessions(state, rday)
-  const testUnlock = testUnlockMin(startMin)
+  const ready = readiness(state, rday)
   const test = state.attempts?.[dailyTestId(day.day_no)]
-  if (nowMin >= testUnlock && !test?.submitted_at) return { kind: 'test', title: 'Take today’s Daily Test', reason: 'It is the final session of the day and is now unlocked. It is based on today’s topics.', detail: '30 questions · 30 minutes', action: { to: '/daily-test', label: 'Start Daily Test' } }
+  if (ready.ready && !test?.submitted_at) return { kind: 'test', title: 'Take today’s Daily Test', reason: 'Today’s preparation is complete — the Daily Test is ready now. It is based on today’s topics.', detail: '30 questions · 30 minutes', action: { to: '/daily-test', label: 'Start Daily Test' } }
   const running = sessions.find((s) => s.status === 'in_progress' || s.status === 'paused')
   if (running) return { kind: 'session', title: `Continue ${running.slot.label}`, reason: `${name(running.topic_id)} is in progress.`, sessionId: running.id, action: { to: '/today', label: 'Resume Session' } }
-  // Current timetable slot
+  // Current timetable slot (a guide, not a lock)
   const cur = sessions.find((s) => { const t = slotTimes(s.slot, startMin); return nowMin >= t.start && nowMin < t.end })
   if (cur && cur.status !== 'completed') {
     const t = slotTimes(cur.slot, startMin)
-    return { kind: 'session', title: cur.slot.key === 'revision' ? 'Today’s Revision' : `${cur.slot.subject === 'reasoning' ? '🧠' : cur.slot.subject === 'numerical' ? '🔢' : '🎯'} ${name(cur.topic_id)}`,
+    return { kind: 'session', title: cur.slot.key === 'revision' ? 'Today’s Revision' : `${SUBJECT_ICON[cur.slot.subject] || '🎯'} ${name(cur.topic_id)}`,
       reason: `Scheduled now: ${cur.slot.label}.${cur.slot.key === 'weak' ? ' ' + rday.weak_reason + '.' : ''}`, detail: `${t.start}-${t.end}`, sessionId: cur.id, action: { to: '/today', label: 'Start Session' } }
   }
-  if (due.length && nowMin < testUnlock) {
+  const next = sessions.find((s) => s.status !== 'completed' && !s.slot.optional)
+  if (next && nowMin >= testSuggestedMin(startMin)) {
+    return { kind: 'session', title: `Finish ${next.slot.label}`, reason: `${ready.remaining.length} item(s) left before today’s Daily Test.`, sessionId: next.id, action: { to: '/today', label: 'Continue Today’s Plan' } }
+  }
+  if (due.length) {
     const overdue = due.filter((r) => r.due_date < today)
     return { kind: 'revision', title: `Revise ${name(due[0].topic_id)}`, reason: overdue.length ? `${overdue.length} revision(s) overdue — spaced repetition keeps topics fresh.` : 'Revision is due today.',
-      detail: '10-minute formula recap + 10 practice questions', topic: due[0].topic_id, action: { to: '/revision', label: 'Open Revision' } }
+      detail: '10-minute formula recap + 10-question revision quiz', topic: due[0].topic_id, action: { to: '/revision', label: 'Open Revision' } }
   }
+  if (next) return { kind: 'session', title: `${next.slot.label}`, reason: `Next pending item: ${next.slot.key === 'revision' ? 'today’s revision' : name(next.topic_id)}.`, sessionId: next.id, action: { to: '/today', label: 'Go to Today’s Plan' } }
   if (weak.length) return { kind: 'practice', title: `Study ${weak[0].name}`, reason: `Recent accuracy is low (${weak[0].recentAccuracy}%).`, detail: '20 practice questions + 10-minute revision', topic: weak[0].id, action: { to: `/practice?topic=${weak[0].id}&count=20`, label: 'Practice Now' } }
   if (mistakes.length) return { kind: 'mistakes', title: 'Re-attempt Mistake Book questions', reason: `${mistakes.length} mistake(s) are due for revision.`, action: { to: '/mistakes?due=1', label: 'Open Mistake Book' } }
-  const next = sessions.find((s) => s.status !== 'completed')
-  if (next) return { kind: 'session', title: `${next.slot.label}`, reason: `Next pending session: ${name(next.topic_id)}.`, sessionId: next.id, action: { to: '/today', label: 'Go to Today’s Plan' } }
-  if (nowMin < testUnlock) return { kind: 'wait', title: 'All sessions done — great work!', reason: 'The Daily Test unlocks at the final slot. Do a quick formula revision until then.', action: { to: '/revision', label: 'Quick Revision' } }
   return { kind: 'done', title: 'Today’s preparation is complete!', reason: 'Rest well. Tomorrow’s plan is ready.', action: { to: '/plan', label: 'View Plan' } }
 }
 
@@ -328,9 +367,9 @@ export const ACHIEVEMENTS = [
   { key: 'q-1000', name: '1000 Questions', desc: 'Solve 1,000 questions', icon: '📚' },
   { key: 'q-5000', name: '5000 Questions', desc: 'Solve 5,000 questions', icon: '🧮' },
   { key: 'first-daily', name: 'Daily Test Done', desc: 'Complete your first Daily Test', icon: '📝' },
-  { key: 'first-mock', name: 'First Mock', desc: 'Complete your first full Prelims mock', icon: '🎯' },
+  { key: 'first-mock', name: 'First Mock', desc: 'Complete your first full mock test', icon: '🎯' },
   { key: 'acc-90', name: '90% Accuracy', desc: 'Score 90%+ accuracy in a test of 20+ questions', icon: '💎' },
-  { key: 'syllabus', name: 'Full Syllabus Completed', desc: 'Complete the concept session of every syllabus topic', icon: '🎓' },
+  { key: 'syllabus', name: 'Full Syllabus Completed', desc: 'Complete every syllabus topic at least once', icon: '🎓' },
   { key: 'mistake-master', name: 'Mistake Master', desc: 'Master 25 Mistake Book questions', icon: '🛠️' },
 ]
 
@@ -346,31 +385,45 @@ export function earnedAchievements(state, plan, today, stats, ov) {
   if (subs.some((a) => a.kind === 'daily')) earned.add('first-daily')
   if (subs.some((a) => a.kind === 'mock')) earned.add('first-mock')
   if (subs.some((a) => a.question_ids.length >= 20 && a.accuracy >= 90)) earned.add('acc-90')
-  const syll = allTopics(state.content).filter((t) => TOPICS.some((x) => x.id === t.id))
+  const syll = allTopics(state.content, state.profile?.language).filter((t) => TOPICS.some((x) => x.id === t.id) && t.id !== 'current-affairs')
   if (syll.every((t) => stats[t.id]?.learned)) earned.add('syllabus')
   if (Object.values(state.mistakes || {}).filter((m) => m.mastered).length >= 25) earned.add('mistake-master')
   return earned
 }
 
-/** Score an attempt. Negative marking applies to mocks (official pattern: 0.25 per wrong answer). */
+/**
+ * Score an attempt. `negative` is the fraction of a question's marks deducted per wrong answer (official: 0.25).
+ * attempt.marks optionally gives marks per question by subject (Mains: Reasoning/Numerical 1.25, Computer 0.5, others 1).
+ */
 export function scoreAttempt(attempt, questions, negative = 0) {
-  let correct = 0, wrong = 0, skipped = 0
-  const bySubject = {}, byTopic = {}
+  let correct = 0, wrong = 0, skipped = 0, score = 0, max = 0
+  const bySubject = {}, byTopic = {}, bySubtopic = {}
   const meta = {}
   for (const q of questions) {
     const a = attempt.answers?.[q.id]
-    const sub = (bySubject[q.subject] ||= { attempted: 0, correct: 0, wrong: 0, skipped: 0, total: 0, time: 0, score: 0 })
+    const m = attempt.marks?.[q.subject] ?? 1
+    const sub = (bySubject[q.subject] ||= { attempted: 0, correct: 0, wrong: 0, skipped: 0, total: 0, time: 0, score: 0, max: 0 })
     const top = (byTopic[q.topic] ||= { attempted: 0, correct: 0, total: 0, time: 0 })
-    sub.total++; top.total++
+    const stKey = `${q.topic}::${q.subtopic || 'General'}`
+    const st = (bySubtopic[stKey] ||= { topic: q.topic, subtopic: q.subtopic || 'General', attempted: 0, correct: 0, total: 0 })
+    sub.total++; top.total++; st.total++; sub.max += m; max += m
     sub.time += a?.time_sec || 0; top.time += a?.time_sec || 0
-    meta[q.id] = { topic: q.topic, subject: q.subject, answer: q.answer, difficulty: q.difficulty }
+    meta[q.id] = { topic: q.topic, subject: q.subject, subtopic: q.subtopic, answer: q.answer, difficulty: q.difficulty }
     if (a?.choice == null) { skipped++; sub.skipped++; continue }
-    sub.attempted++; top.attempted++
-    if (a.choice === q.answer) { correct++; sub.correct++; top.correct++ } else { wrong++; sub.wrong++ }
+    sub.attempted++; top.attempted++; st.attempted++
+    if (a.choice === q.answer) { correct++; sub.correct++; top.correct++; st.correct++; sub.score += m; score += m }
+    else { wrong++; sub.wrong++; sub.score -= m * negative; score -= m * negative }
   }
-  for (const s of Object.values(bySubject)) s.score = s.correct - s.wrong * negative
+  for (const s of Object.values(bySubject)) s.score = Math.round(s.score * 100) / 100
   const attempted = correct + wrong
-  return { correct, wrong, skipped, attempted, score: Math.round((correct - wrong * negative) * 100) / 100, max: questions.length, accuracy: accuracy(correct, attempted), bySubject, byTopic, meta }
+  return { correct, wrong, skipped, attempted, score: Math.round(score * 100) / 100, max: Math.round(max * 100) / 100, accuracy: accuracy(correct, attempted), bySubject, byTopic, bySubtopic, meta }
+}
+
+/** Weak areas from an attempt: sub-topics with accuracy below 60% (at least one wrong/skipped). */
+export function weakAreas(attempt) {
+  return Object.values(attempt.by_subtopic || {})
+    .filter((s) => s.total > 0 && s.correct < s.total && (s.correct / s.total) * 100 < 60)
+    .sort((a, b) => a.correct / a.total - b.correct / b.total)
 }
 
 export const resolveQuestions = (ids, content) => ids.map((id) => questionFromId(id, content?.questions || [])).filter(Boolean)

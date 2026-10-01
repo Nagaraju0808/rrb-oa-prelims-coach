@@ -27,7 +27,7 @@ function simplification(r, d) {
       explanation: `√${s * s} = ${s}; ${s} × ${a} = ${s * a}; ${b} ÷ ${c} = ${q}. Total = ${ans}.` }
   }
   if (type === 'd') {
-    const den = r.pick([3, 4, 5, 7, 8]), num = r.int(1, den - 1), X = den * r.int(10, 60), c = r.int(4, 12), q = r.int(20, 150)
+    const den = r.pick([3, 4, 5, 7, 8]), num = r.pick([...Array(den - 1).keys()].map((k) => k + 1).filter((k) => gcd(k, den) === 1)), X = den * r.int(10, 60), c = r.int(4, 12), q = r.int(20, 150)
     const res = (num * X) / den + c ** 3 - q
     return { subtopic: 'Fractions', stem: `${num}/${den} of ${X} + ${c}³ − ? = ${res}`, ...numOptions(r, q, { step: r.pick([3, 5, 7]) }),
       explanation: `${num}/${den} × ${X} = ${(num * X) / den}; ${c}³ = ${c ** 3}. So ? = ${(num * X) / den} + ${c ** 3} − ${res} = ${q}.` }

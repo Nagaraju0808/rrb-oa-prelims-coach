@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Plus, Pencil, Trash2, Eye, EyeOff, RotateCcw } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
-import { TOPICS } from '../lib/syllabus.js'
+import { TOPICS, SUBJECTS } from '../lib/syllabus.js'
 import { allTopics } from '../lib/engine.js'
 import { generatePlan } from '../lib/plan.js'
-import { GENERATORS } from '../lib/questions/index.js'
+import { hasQuestions } from '../lib/questions/index.js'
 import { fmtDate } from '../lib/dates.js'
 import { PageHeader, Tabs, Modal, Field, Segmented, SubjectChip, Empty, StatusBadge } from '../components/ui.jsx'
 
@@ -32,7 +32,7 @@ function TopicSelect({ value, onChange, subject, allowAll }) {
   return (
     <select className="input" value={value} onChange={(e) => onChange(e.target.value)}>
       {allowAll && <option value="">All topics</option>}
-      {['reasoning', 'numerical'].map((s) => ts.some((t) => t.subject === s) && <optgroup key={s} label={s === 'reasoning' ? 'Reasoning' : 'Numerical Ability'}>{ts.filter((t) => t.subject === s).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>)}
+      {SUBJECTS.map((sb) => ts.some((t) => t.subject === sb.id) && <optgroup key={sb.id} label={sb.name}>{ts.filter((t) => t.subject === sb.id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>)}
     </select>
   )
 }
@@ -59,7 +59,7 @@ function Questions() {
         <div className="min-w-56 flex-1"><Field label="Filter by topic"><TopicSelect value={filter} onChange={setFilter} allowAll /></Field></div>
         <button className="btn-primary" onClick={() => { setErr(''); setEdit({ ...blankQ(), topic: filter || 'inequality' }) }}><Plus size={16} />Add question</button>
       </div>
-      <p className="muted mb-3">{qs.length} custom question(s). Custom questions are mixed into Daily Tests, practice tests and mocks for their topic{filter && GENERATORS[filter] ? ', alongside the built-in question generator for this topic' : ''}.</p>
+      <p className="muted mb-3">{qs.length} custom question(s). Custom questions are mixed into Daily Tests, practice tests and mocks for their topic{filter && hasQuestions(filter) ? ', alongside the built-in question generator for this topic' : ''}.</p>
       {qs.length === 0 ? <Empty icon="❓" title="No custom questions yet">Add questions from previous papers or your coaching material.</Empty> : (
         <ul className="divide-y divide-slate-100 dark:divide-slate-800">{qs.map((q) => (
           <li key={q.id} className="flex items-start gap-3 py-3 text-sm">
@@ -134,7 +134,7 @@ function Topics() {
         <Modal open onClose={() => setEdit(null)} title={edit.id ? 'Edit topic' : 'Add topic'} footer={<><button className="btn-secondary" onClick={() => setEdit(null)}>Cancel</button><button className="btn-primary" onClick={save} disabled={!edit.name.trim()}>Save</button></>}>
           <div className="space-y-3">
             <Field label="Name"><input className="input" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
-            <Field label="Subject"><Segmented value={edit.subject} onChange={(v) => setEdit({ ...edit, subject: v })} options={[{ value: 'reasoning', label: 'Reasoning' }, { value: 'numerical', label: 'Numerical' }]} /></Field>
+            <Field label="Subject"><select className="input" value={edit.subject} onChange={(e) => setEdit({ ...edit, subject: e.target.value })}>{SUBJECTS.map((sb) => <option key={sb.id} value={sb.id}>{sb.name}</option>)}</select></Field>
             <Field label="Priority"><Segmented value={edit.priority} onChange={(v) => setEdit({ ...edit, priority: v })} options={['high', 'medium', 'low'].map((x) => ({ value: x, label: x }))} /></Field>
             <Field label="Sub-topics (comma separated)"><input className="input" value={edit.subtopicsText} onChange={(e) => setEdit({ ...edit, subtopicsText: e.target.value })} /></Field>
             <Field label="Key notes (one per line)"><textarea className="input" rows={4} value={edit.notesText} onChange={(e) => setEdit({ ...edit, notesText: e.target.value })} /></Field>
@@ -172,7 +172,7 @@ function Templates() {
           <div className="space-y-3">
             <Field label="Name"><input className="input" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="e.g. Arithmetic speed set" /></Field>
             <Field label="Type"><Segmented value={edit.kind} onChange={(v) => setEdit({ ...edit, kind: v })} options={[{ value: 'topic', label: 'Topic(s)' }, { value: 'subject', label: 'Subject' }, { value: 'mixed', label: 'Mixed' }]} /></Field>
-            {edit.kind === 'subject' && <Field label="Subject"><Segmented value={edit.subject} onChange={(v) => setEdit({ ...edit, subject: v })} options={[{ value: 'reasoning', label: 'Reasoning' }, { value: 'numerical', label: 'Numerical' }]} /></Field>}
+            {edit.kind === 'subject' && <Field label="Subject"><select className="input" value={edit.subject} onChange={(e) => setEdit({ ...edit, subject: e.target.value })}>{SUBJECTS.map((sb) => <option key={sb.id} value={sb.id}>{sb.name}</option>)}</select></Field>}
             {edit.kind === 'topic' && <Field label="Topics (Ctrl/Cmd-click for several)">
               <select multiple className="input h-40" value={edit.topics} onChange={(e) => setEdit({ ...edit, topics: [...e.target.selectedOptions].map((o) => o.value) })}>
                 {allTopics(state.content).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>}
@@ -193,24 +193,23 @@ function Templates() {
 function PlanEditor() {
   const { state, actions, today } = useStore()
   const o = state.content.planOverrides || {}
-  const base = generatePlan({ startDate: state.profile.start_date, reasoningConfidence: state.profile.reasoning_confidence, numericalConfidence: state.profile.numerical_confidence })
+  const base = generatePlan({ startDate: state.profile.start_date, reasoningConfidence: state.profile.reasoning_confidence, numericalConfidence: state.profile.numerical_confidence, language: state.profile.language })
   const set = (dayNo, patch) => actions.setContent((c) => { c.planOverrides = c.planOverrides || {}; c.planOverrides[dayNo] = { ...(c.planOverrides[dayNo] || {}), ...patch } })
-  const topics = allTopics(state.content)
-  const opt = (subject) => [<option key="mixed" value="mixed">Mixed (mock day)</option>, ...topics.filter((t) => t.subject === subject).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)]
+  const topics = allTopics(state.content, state.profile.language)
+  const opt = (subject) => [...(subject === 'reasoning' || subject === 'numerical' ? [<option key="mixed" value="mixed">Mixed (mock day)</option>] : []), ...topics.filter((t) => t.subject === subject).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)]
   return (
     <div className="card">
       <p className="muted mb-3">Change which topics are studied on Day 1–60. Days that are already finished keep their recorded history; only future days use the new topics.</p>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead><tr className="text-left text-xs text-slate-500 uppercase"><th className="py-2">Day</th><th>Date</th><th>Reasoning</th><th>Numerical</th><th>Focus</th><th /></tr></thead>
+        <table className="w-full min-w-[1100px] text-sm">
+          <thead><tr className="text-left text-xs text-slate-500 uppercase"><th className="py-2">Day</th><th>Date</th>{SUBJECTS.map((sb) => <th key={sb.id}>{sb.short}</th>)}<th>Focus</th><th /></tr></thead>
           <tbody>{base.map((d) => {
             const ov = o[d.day_no] || {}
             const past = d.date < today
             return (
               <tr key={d.day_no} className="border-t border-slate-100 dark:border-slate-800">
                 <td className="py-1.5 font-semibold">{d.day_no}</td><td className="text-xs text-slate-500">{fmtDate(d.date)}</td>
-                <td><select disabled={past} className="input !py-1" value={ov.reasoning || d.reasoning_topic} onChange={(e) => set(d.day_no, { reasoning: e.target.value })}>{opt('reasoning')}</select></td>
-                <td><select disabled={past} className="input !py-1" value={ov.numerical || d.numerical_topic} onChange={(e) => set(d.day_no, { numerical: e.target.value })}>{opt('numerical')}</select></td>
+                {SUBJECTS.map((sb) => <td key={sb.id}><select disabled={past} className="input !py-1" value={ov[sb.id] || d[`${sb.id}_topic`]} onChange={(e) => set(d.day_no, { [sb.id]: e.target.value })}>{opt(sb.id)}</select></td>)}
                 <td><input disabled={past} className="input !py-1" value={ov.focus ?? d.focus} onChange={(e) => set(d.day_no, { focus: e.target.value })} /></td>
                 <td>{o[d.day_no] && !past && <button className="btn-ghost !p-1.5" title="Reset to default" aria-label={`Reset Day ${d.day_no}`} onClick={() => actions.setContent((c) => { delete c.planOverrides[d.day_no] })}><RotateCcw size={14} /></button>}</td>
               </tr>

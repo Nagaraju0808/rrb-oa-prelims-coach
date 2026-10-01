@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { PenLine, ClipboardList, Eye, ExternalLink } from 'lucide-react'
+import { PenLine, ClipboardList, Eye, ExternalLink, Brain } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { allTopics } from '../lib/engine.js'
 import { fmtDate } from '../lib/dates.js'
-import { generateQuestion, GENERATORS } from '../lib/questions/index.js'
-import { createPractice } from '../lib/tests.js'
+import { generateQuestion, hasQuestions } from '../lib/questions/index.js'
+import { createPractice, createRevisionQuiz } from '../lib/tests.js'
+import { ConceptView, ShortcutsView, RulesView } from '../components/TopicGuide.jsx'
 import { QuestionBody } from '../components/TestRunner.jsx'
-import { PageHeader, StatusBadge, SubjectChip, accColor, Empty } from '../components/ui.jsx'
+import { PageHeader, StatusBadge, SubjectChip, accColor, Empty, Tabs } from '../components/ui.jsx'
 import { StageTrack } from './Subject.jsx'
 
 export default function TopicPage() {
@@ -16,10 +17,12 @@ export default function TopicPage() {
   const nav = useNavigate()
   const [show, setShow] = useState(false)
   const [seed, setSeed] = useState(1)
+  const [gtab, setGtab] = useState('shortcuts')
   const topic = allTopics(state.content).find((t) => t.id === id)
-  const sample = useMemo(() => (GENERATORS[id] ? generateQuestion(id, 'medium', `sample-${seed}`) : (state.content.questions || []).find((q) => q.topic === id)), [id, seed, state.content.questions])
+  const sample = useMemo(() => (hasQuestions(id) ? generateQuestion(id, 'medium', `sample-${seed}`) : (state.content.questions || []).find((q) => q.topic === id)), [id, seed, state.content.questions])
   if (!topic) return <Empty icon="🔎" title="Topic not found"><Link to="/" className="text-brand-600 underline">Go to Dashboard</Link></Empty>
   const s = stats[id]
+  const canTest = hasQuestions(id) || (state.content.questions || []).some((q) => q.topic === id)
   const revs = Object.values(state.revisions).filter((r) => r.topic_id === id).sort((a, b) => (a.due_date < b.due_date ? -1 : 1))
   const resources = (state.content.resources || []).filter((r) => r.topic === id)
   const start = (count, kind, title) => { const aid = createPractice({ state, actions, topics: [id], count, kind, title }); nav(`/test/${aid}`) }
@@ -27,8 +30,10 @@ export default function TopicPage() {
   return (
     <div className="fade-in space-y-4">
       <PageHeader title={topic.name} subtitle={<span className="flex flex-wrap items-center gap-2"><SubjectChip subject={topic.subject} /><span className="capitalize">{topic.priority} priority</span>{s && <StatusBadge status={s.status} />}</span>}>
-        <button className="btn-primary" onClick={() => start(10, 'practice', `${topic.name} — Quick practice`)}><PenLine size={16} />Practice 10</button>
-        <button className="btn-secondary" onClick={() => start(20, 'topic', `Topic Test — ${topic.name}`)}><ClipboardList size={16} />Topic Test (20 Q)</button>
+        {canTest && <>
+          <button className="btn-primary" onClick={() => start(10, 'practice', `${topic.name} — Quick practice`)}><PenLine size={16} />Practice 10</button>
+          <button className="btn-secondary" onClick={() => start(20, 'topic', `Topic Test — ${topic.name}`)}><ClipboardList size={16} />Topic Test (20 Q)</button>
+        </>}
       </PageHeader>
       {s && (
         <div className="card">
@@ -42,12 +47,18 @@ export default function TopicPage() {
           </div>
         </div>
       )}
+      <div className="card">
+        <Tabs value={gtab} onChange={setGtab} tabs={[{ value: 'concept', label: '📚 Concept' }, { value: 'shortcuts', label: '💡 Shortcuts' }, { value: 'rules', label: '📌 Rules & Formulas' }]} />
+        {gtab === 'concept' && <ConceptView topic={topic} />}
+        {gtab === 'shortcuts' && <ShortcutsView topic={topic} />}
+        {gtab === 'rules' && <RulesView topic={topic} />}
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card">
-          <h2 className="h2 mb-2">Key concepts & shortcuts</h2>
-          <ul className="list-disc space-y-1.5 pl-5 text-sm">{(topic.notes || []).map((n, i) => <li key={i}>{n}</li>)}</ul>
-          <h3 className="mt-4 mb-2 text-sm font-bold">Sub-topics covered</h3>
-          <div className="flex flex-wrap gap-1.5">{(topic.subtopics || []).map((x) => <span key={x} className="chip bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{x}</span>)}</div>
+          <h2 className="h2 mb-2">Revision Quiz</h2>
+          {!canTest && <p className="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">This topic has no built-in question bank (it needs a live news source). Add your own questions in <Link className="underline" to="/admin">Admin → Questions</Link>; until then the quiz uses other {topic.subject === 'ga' ? 'General Awareness' : 'related'} topics.</p>}
+          <p className="muted mb-3">10 questions on {topic.name} with score, accuracy, answers, explanations and weak areas.</p>
+          <button className="btn-primary" onClick={() => nav(`/test/${createRevisionQuiz({ state, actions, topics: [id], fallback: allTopics(state.content, state.profile?.language).filter((t) => t.subject === topic.subject).map((t) => t.id), title: `Revision Quiz — ${topic.name}`, return_to: `/topic/${id}` })}`)}><Brain size={16} />Start Revision Quiz</button>
         </div>
         <div className="card">
           <h2 className="h2 mb-2">Revision schedule</h2>

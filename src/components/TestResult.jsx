@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { CheckCircle2, XCircle, MinusCircle, Clock, Target, BookPlus, Check } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
-import { MISTAKE_TYPES } from '../lib/engine.js'
+import { MISTAKE_TYPES, weakAreas } from '../lib/engine.js'
 import { fmtDuration } from '../lib/dates.js'
 import { topicName } from '../lib/syllabus.js'
 import { QuestionBody } from './TestRunner.jsx'
@@ -16,6 +17,7 @@ export default function TestResult({ attempt, questions, actionsSlot }) {
   const list = useMemo(() => questions.map((q, i) => ({ q, i, st: status(q) })).filter((x) => filter === 'all' || x.st === filter), [questions, filter]) // eslint-disable-line react-hooks/exhaustive-deps
   const counts = { all: questions.length, wrong: attempt.wrong, skipped: attempt.skipped, correct: attempt.correct }
   const pct = attempt.max ? Math.max(0, (attempt.score / attempt.max) * 100) : 0
+  const weak = weakAreas(attempt)
 
   return (
     <div className="fade-in space-y-4">
@@ -37,7 +39,22 @@ export default function TestResult({ attempt, questions, actionsSlot }) {
             </div>
           </div>
         </div>
+        {attempt.kind === 'revision-quiz' && attempt.session_id && (
+          <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">✅ Revision Quiz saved — the topic is marked completed in Today’s Plan and its spaced revisions are scheduled.</p>
+        )}
         {actionsSlot && <div className="mt-4 flex flex-wrap gap-2">{actionsSlot}</div>}
+      </div>
+
+      <div className="card">
+        <h3 className="h2 mb-2">Weak areas</h3>
+        {weak.length === 0 ? <p className="muted">{attempt.correct + attempt.wrong ? 'No weak areas in this test — every sub-topic scored 60% or more. 🎉' : 'You did not answer any question, so weak areas cannot be identified.'}</p> : (
+          <ul className="grid gap-2 sm:grid-cols-2">{weak.map((w) => (
+            <li key={w.topic + w.subtopic} className="flex items-center gap-3 rounded-xl border border-rose-200 p-3 text-sm dark:border-rose-900">
+              <div className="min-w-0 flex-1"><div className="truncate font-semibold">{w.subtopic}</div><div className="truncate text-xs text-slate-500">{topicName(w.topic)}</div></div>
+              <span className="font-bold text-rose-600">{w.correct}/{w.total}</span>
+              <Link to={`/topic/${w.topic}`} className="btn-secondary !px-2 !py-1 text-xs">Shortcuts</Link>
+            </li>))}</ul>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -49,7 +66,7 @@ export default function TestResult({ attempt, questions, actionsSlot }) {
               return (
                 <div key={k}>
                   <div className="mb-1 flex items-center justify-between text-sm"><SubjectChip subject={k} />
-                    <span className="font-semibold">{Math.round(s.score * 100) / 100}/{s.total} · <span className={accColor(acc)}>{acc}%</span></span></div>
+                    <span className="font-semibold">{Math.round(s.score * 100) / 100}/{Math.round((s.max ?? s.total) * 100) / 100} · <span className={accColor(acc)}>{acc}%</span></span></div>
                   <ProgressBar value={(s.correct / s.total) * 100} color={accBar(acc)} />
                   <div className="mt-1 text-xs text-slate-500">✔ {s.correct} · ✘ {s.wrong} · — {s.skipped} · ⏱ {fmtDuration(s.time)} ({s.attempted ? Math.round(s.time / Math.max(1, s.attempted + s.skipped)) : 0}s/question)</div>
                 </div>
