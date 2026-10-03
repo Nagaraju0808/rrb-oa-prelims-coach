@@ -3,7 +3,7 @@ import { studyDates, generatePlan, SLOTS, TEST_SLOT, testSuggestedMin, currentDa
 import { isSunday } from '../lib/dates.js'
 import { revisionDates, scoreAttempt, topicStats, weakTopics, dayStatus, streak, resolveDay, createTopicRevisions, recommend, dailyTestId, sessionId, readiness, weakAreas } from '../lib/engine.js'
 import { emptyState, migrate } from '../lib/store.jsx'
-import { dailySplit, createRevisionQuiz, createMock } from '../lib/tests.js'
+import { dailySplit, createRevisionQuiz, createMock, createPractice } from '../lib/tests.js'
 import { generateQuestion } from '../lib/questions/index.js'
 
 const profile = { start_date: '2026-10-01', level: 'beginner', reasoning_confidence: 'average', numerical_confidence: 'average', study_start_min: 600 }
@@ -224,5 +224,35 @@ describe('tests: revision quiz, daily split, mains marks', () => {
   })
   it('weak areas come from sub-topics below 60%', () => {
     expect(weakAreas({ by_subtopic: { a: { topic: 't', subtopic: 'A', total: 4, correct: 1 }, b: { topic: 't', subtopic: 'B', total: 2, correct: 2 } } }).map((x) => x.subtopic)).toEqual(['A'])
+  })
+})
+
+describe('practice tests give the same questions every time', () => {
+  const store = () => {
+    const state = { ...emptyState(), profile }
+    const actions = { createAttempt: (a) => { const id = `a${Object.keys(state.attempts).length}`; state.attempts[id] = { ...a, id, question_ids: a.questions.map((q) => q.id), submitted_at: null }; return id } }
+    return { state, actions }
+  }
+  it('pressing the button again (after Back) resumes the unfinished test', () => {
+    const { state, actions } = store()
+    const a = createPractice({ state, actions, topics: ['percentage'], count: 15, title: 'P', session_id: 's-1-numerical' })
+    const b = createPractice({ state, actions, topics: ['percentage'], count: 15, title: 'P', session_id: 's-1-numerical' })
+    expect(b).toBe(a)
+    expect(Object.keys(state.attempts).length).toBe(1)
+  })
+  it('even after finishing, the same button builds the same questions', () => {
+    const { state, actions } = store()
+    const a = createPractice({ state, actions, topics: ['syllogism'], count: 20, title: 'T', kind: 'topic' })
+    state.attempts[a].submitted_at = 'done'
+    const b = createPractice({ state, actions, topics: ['syllogism'], count: 20, title: 'T', kind: 'topic' })
+    expect(b).not.toBe(a)
+    expect(state.attempts[b].question_ids).toEqual(state.attempts[a].question_ids)
+  })
+  it('the revision quiz is stable too', () => {
+    const { state, actions } = store()
+    const a = createRevisionQuiz({ state, actions, topics: ['inequality'], session_id: 's-1-revision' })
+    state.attempts[a].submitted_at = 'done'
+    const b = createRevisionQuiz({ state, actions, topics: ['inequality'], session_id: 's-1-revision' })
+    expect(state.attempts[b].question_ids).toEqual(state.attempts[a].question_ids)
   })
 })

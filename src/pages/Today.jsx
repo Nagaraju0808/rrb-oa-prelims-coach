@@ -63,7 +63,7 @@ export default function Today() {
       // Revision slot: due revision topics → today's topics → everything studied so far. Subject slots: that topic.
       const topics = s.slot.key === 'revision' ? [...new Set(info.due.map((r) => r.topic_id))] : [s.topic_id]
       go(createRevisionQuiz({ state, actions, topics, fallback: s.slot.key === 'revision' ? [...todaysTopics, ...studied] : todaysTopics, session_id: s.id,
-        title: s.slot.key === 'revision' ? 'Revision Quiz — Today’s revision' : `Revision Quiz — ${topicName(s.topic_id)}` }))
+        title: 'Revision Quiz — Today’s revision' }))
     },
     mock: (s) => {
       if (s.status === 'not_started' || s.status === 'missed') actions.startSession(s)
@@ -153,7 +153,7 @@ function SessionCard({ s, t, isNow, rday, info, today, open, onToggle, ctx }) {
 
         {open && (
           <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
-            {isTopic ? <TopicFlow s={s} topic={topic} steps={steps} quizAttempt={quizAttempt} ctx={ctx} />
+            {isTopic ? <TopicFlow s={s} topic={topic} steps={steps} ctx={ctx} />
               : slot.key === 'revision' ? <RevisionFlow s={s} info={info} today={today} quizAttempt={quizAttempt} ctx={ctx} />
                 : mockSlot ? <div className="text-sm"><p className="mb-3">Today is a mock day. The mock follows the official pattern with separately timed sections and 0.25 negative marking.</p>
                   <button className="btn-primary" onClick={() => ctx.mock(s)}><Trophy size={16} />Start Full {rday.mock_type === 'mains' ? 'Mains' : 'Prelims'} Mock</button></div>
@@ -185,12 +185,12 @@ function SessionCard({ s, t, isNow, rday, info, today, open, onToggle, ctx }) {
 
 const FLOW_TABS = [
   { value: 'learn', label: '📚 Concept' }, { value: 'shortcuts', label: '💡 Shortcuts' }, { value: 'rules', label: '📌 Rules' },
-  { value: 'practice', label: '📝 Practice' }, { value: 'revision', label: '🔄 Revision' }, { value: 'quiz', label: '🧠 Revision Quiz' },
+  { value: 'practice', label: '📝 Practice' }, { value: 'revision', label: '🔄 Revision' },
 ]
 
-function TopicFlow({ s, topic, steps, quizAttempt, ctx }) {
+function TopicFlow({ s, topic, steps, ctx }) {
   const { actions } = useStore()
-  const firstOpen = TOPIC_STEPS.find((x) => !steps[x.key])?.key || 'quiz'
+  const firstOpen = TOPIC_STEPS.find((x) => !steps[x.key])?.key || 'revision'
   const [tab, setTab] = useState(firstOpen === 'learn' ? 'learn' : firstOpen)
   const mark = (step) => actions.setStep(s, step)
   const Done = ({ step, label }) => steps[step]
@@ -214,17 +214,13 @@ function TopicFlow({ s, topic, steps, quizAttempt, ctx }) {
       )}
       {tab === 'revision' && (
         <div className="space-y-3 text-sm">
-          <p className="font-semibold">Quick recap before the quiz:</p>
+          <p className="font-semibold">Quick recap:</p>
           <ShortcutsView topic={topic} compact />
           <RulesView topic={topic} />
-          <div className="flex flex-wrap gap-2"><Done step="revision" label="I’ve revised this topic" /><button className="btn-ghost" onClick={() => setTab('quiz')}>Next: Revision Quiz →</button></div>
-        </div>
-      )}
-      {tab === 'quiz' && (
-        <div className="space-y-3 text-sm">
-          <p>10 questions on <b>{topic.name}</b>. You’ll get your score, accuracy, the correct answers with explanations and your weak areas. Finishing the quiz completes this topic and schedules its spaced revisions.</p>
-          {quizAttempt && <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">Last quiz: <b>{quizAttempt.score}/{quizAttempt.max}</b> · {quizAttempt.accuracy}% accuracy · <Link className="text-brand-600 hover:underline" to={`/test/${quizAttempt.id}`}>View analysis</Link></div>}
-          <button className="btn-primary" onClick={() => ctx.quiz(s)}><Brain size={16} />{quizAttempt ? 'Retake Revision Quiz' : 'Start Revision Quiz'}</button>
+          <div className="flex flex-wrap gap-2">
+            <Done step="revision" label="I’ve revised this topic" />
+            {(s.status === 'not_started' || s.status === 'missed') && <button className="btn-success" onClick={() => { actions.startSession(s); ctx.complete(s) }}><CheckCircle2 size={16} />Mark topic completed</button>}
+          </div>
         </div>
       )}
     </div>

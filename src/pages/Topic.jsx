@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { PenLine, ClipboardList, Eye, ExternalLink, Brain } from 'lucide-react'
+import { PenLine, ClipboardList, Eye, ExternalLink } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { allTopics } from '../lib/engine.js'
 import { fmtDate } from '../lib/dates.js'
 import { generateQuestion, hasQuestions } from '../lib/questions/index.js'
-import { createPractice, createRevisionQuiz } from '../lib/tests.js'
+import { createPractice } from '../lib/tests.js'
 import { ConceptView, ShortcutsView, RulesView } from '../components/TopicGuide.jsx'
 import { QuestionBody } from '../components/TestRunner.jsx'
 import { PageHeader, StatusBadge, SubjectChip, accColor, Empty, Tabs } from '../components/ui.jsx'
@@ -54,12 +54,6 @@ export default function TopicPage() {
         {gtab === 'rules' && <RulesView topic={topic} />}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="card">
-          <h2 className="h2 mb-2">Revision Quiz</h2>
-          {!canTest && <p className="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">This topic has no built-in question bank (it needs a live news source). Add your own questions in <Link className="underline" to="/admin">Admin → Questions</Link>; until then the quiz uses other {topic.subject === 'ga' ? 'General Awareness' : 'related'} topics.</p>}
-          <p className="muted mb-3">10 questions on {topic.name} with score, accuracy, answers, explanations and weak areas.</p>
-          <button className="btn-primary" onClick={() => nav(`/test/${createRevisionQuiz({ state, actions, topics: [id], fallback: allTopics(state.content, state.profile?.language).filter((t) => t.subject === topic.subject).map((t) => t.id), title: `Revision Quiz — ${topic.name}`, return_to: `/topic/${id}` })}`)}><Brain size={16} />Start Revision Quiz</button>
-        </div>
         <div className="card">
           <h2 className="h2 mb-2">Revision schedule</h2>
           {revs.length === 0 ? <p className="muted">Revisions are scheduled automatically (Day +1, +4, +7, +14, +30) when you complete this topic’s concept session.</p> : (

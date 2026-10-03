@@ -7,6 +7,12 @@ import { phaseOf, topicField, SUBJECT_SLOTS } from './plan.js'
 const customOf = (state) => state.content?.questions || []
 const recentIds = (state, n = 400) => new Set(Object.values(state.attempts).sort((a, b) => (a.started_at < b.started_at ? 1 : -1)).flatMap((a) => a.question_ids).slice(0, n))
 const lang = (state) => state.profile?.language || 'en'
+/**
+ * Practice-style tests use a fixed key → fixed seed, so pressing the same button again (e.g. after going Back)
+ * gives exactly the same questions. An unfinished attempt with the same key is resumed instead of recreated.
+ */
+const practiceKey = (kind, session_id, topics, count) => `${kind}|${session_id || ''}|${[...new Set(topics)].sort().join(',')}|${count}`
+const openAttempt = (state, key) => Object.values(state.attempts || {}).find((a) => a.reuse_key === key && !a.submitted_at)
 const activeTopicIds = (state, subject) => allTopics(state.content, lang(state)).filter((t) => t.subject === subject).map((t) => t.id)
 const withQuestions = (state, ids) => ids.filter((t) => hasQuestions(t) || customOf(state).some((q) => q.topic === t))
 
@@ -75,34 +81,43 @@ export function createRevisionQuiz({ state, actions, topics, fallback = [], titl
   let use = withQuestions(state, clean(topics))
   if (!use.length) use = withQuestions(state, clean(fallback))
   if (!use.length) use = SUBJECT_IDS.flatMap((s) => withQuestions(state, activeTopicIds(state, s)))
-  const qs = buildQuestionSet({ topics: use, count, mix: { easy: 40, medium: 40, hard: 20 }, seed: `rq-${Date.now()}`, custom: customOf(state), exclude: recentIds(state, 150) })
+  const key = practiceKey('revision-quiz', session_id, use, count)
+  const open = openAttempt(state, key)
+  if (open) return open.id
+  const qs = buildQuestionSet({ topics: use, count, mix: { easy: 40, medium: 40, hard: 20 }, seed: key, custom: customOf(state) })
   const time = qs.reduce((s, q) => s + (TARGET_SEC[q.subject] || 36), 0) * 1.5
   return actions.createAttempt({ kind: 'revision-quiz', title: title || 'Revision Quiz', questions: qs, duration_sec: Math.max(300, Math.round(time / 60) * 60),
-    session_id, topics: use, return_to })
+    session_id, topics: use, return_to, reuse_key: key })
 }
 
 export function createPractice({ state, actions, topics, count = 20, title, kind = 'practice', session_id = null, mix, minutes, return_to = null }) {
   // A topic without questions (e.g. Current Affairs before you add any) falls back to the rest of its subject.
+  const key = practiceKey(kind, session_id, topics, count)
+  const open = openAttempt(state, key)
+  if (open) return open.id
   let use = withQuestions(state, topics)
   if (!use.length) {
     const subjects = new Set(allTopics(state.content).filter((t) => topics.includes(t.id)).map((t) => t.subject))
     use = [...subjects].flatMap((sub) => withQuestions(state, activeTopicIds(state, sub)))
   }
-  const qs = buildQuestionSet({ topics: use, count, mix: mix || { easy: 30, medium: 50, hard: 20 }, seed: `${kind}-${Date.now()}`, custom: customOf(state), exclude: recentIds(state) })
+  const qs = buildQuestionSet({ topics: use, count, mix: mix || { easy: 30, medium: 50, hard: 20 }, seed: key, custom: customOf(state) })
   const perQ = qs.reduce((s, q) => s + (TARGET_SEC[q.subject] || 36), 0)
-  return actions.createAttempt({ kind, title, questions: qs, duration_sec: Math.round((minutes ? minutes * 60 : perQ * 1.25) / 60) * 60 || 600, session_id, topics, return_to })
+  return actions.createAttempt({ kind, title, questions: qs, duration_sec: Math.round((minutes ? minutes * 60 : perQ * 1.25) / 60) * 60 || 600, session_id, topics, return_to, reuse_key: key })
 }
 
 /** Weekly Test — 50 questions across every subject from this week's topics (Mon–Sat). */
 export function createWeeklyTest({ state, actions, weekTopics, title = 'Weekly Test' }) {
   const per = { reasoning: 13, numerical: 13, language: 9, ga: 8, computer: 7 }
+  const key = practiceKey('weekly', '', weekTopics, 50)
+  const open = openAttempt(state, key)
+  if (open) return open.id
   const qs = []
   for (const subject of SUBJECT_IDS) {
     const mine = withQuestions(state, weekTopics.filter((t) => activeTopicIds(state, subject).includes(t)))
     const topics = mine.length ? mine : withQuestions(state, activeTopicIds(state, subject))
-    qs.push(...buildQuestionSet({ topics, count: per[subject], seed: `weekly-${Date.now()}-${subject}`, custom: customOf(state), exclude: recentIds(state) }))
+    qs.push(...buildQuestionSet({ topics, count: per[subject], seed: `${key}-${subject}`, custom: customOf(state) }))
   }
-  return actions.createAttempt({ kind: 'weekly', title, questions: qs, duration_sec: 50 * 60, topics: [...new Set(qs.map((q) => q.topic))], negative: 0.25 })
+  return actions.createAttempt({ kind: 'weekly', title, questions: qs, duration_sec: 50 * 60, topics: [...new Set(qs.map((q) => q.topic))], negative: 0.25, reuse_key: key })
 }
 
 // Blueprints mirror recent paper weightage (40 questions per section).

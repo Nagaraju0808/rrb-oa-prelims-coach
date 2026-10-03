@@ -10,11 +10,11 @@ export function goalFor(slot, topicId, rday, extra = {}) {
   const mock = rday.mock_type === 'mains' ? 'Mains-pattern mock (200 Q, 120 min)' : 'Prelims-pattern mock (80 Q, 45 min)'
   if (rday.is_mock_day && slot.key === 'reasoning') return `Full ${mock}`
   if (rday.is_mock_day && slot.key === 'numerical') return 'Mock analysis — review every wrong and skipped question; add them to the Mistake Book'
-  if (slot.key === 'revision') return `Revise ${extra.due ?? 0} due topic(s), then take the revision quiz`
+  if (slot.key === 'revision') return `Revise ${extra.due ?? 0} due topic(s), then take today’s revision quiz`
   if (slot.key === 'weak') return `${t}: 20 focused questions${rday.weak_reason ? ` — ${rday.weak_reason}` : ''}`
   if (phase === 3 && (slot.subject === 'reasoning' || slot.subject === 'numerical')) return `Speed drill on ${t}: shortcuts first, then timed questions at exam pace`
-  if (phase === 4) return `Revise ${t}: concept + shortcuts recap, practice, revision quiz`
-  return `${t}: learn the concept and shortcuts, practise, then take the revision quiz`
+  if (phase === 4) return `Revise ${t}: concept + shortcuts recap, then practice`
+  return `${t}: learn the concept and shortcuts, practise, then revise`
 }
 
 export function useTodayInfo() {

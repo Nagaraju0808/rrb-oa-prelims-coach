@@ -254,12 +254,12 @@ export function StoreProvider({ userId = 'local', children }) {
     resetSession(id) { mutate((s) => { const o = s.sessions[id]; if (o) Object.assign(o, { status: 'paused', run_started_at: null, completed_at: null, updated_at: iso() }) }) },
 
     /** Create an attempt record. questions: full question objects. */
-    createAttempt({ id = uid('att'), kind, title, questions, duration_sec, sections = null, day_no = null, session_id = null, negative = 0, topics = [], marks = null, return_to = null, mock_type = null }) {
+    createAttempt({ id = uid('att'), kind, title, questions, duration_sec, sections = null, day_no = null, session_id = null, negative = 0, topics = [], marks = null, return_to = null, mock_type = null, reuse_key = null }) {
       const ts = iso()
       const meta = Object.fromEntries(questions.map((q) => [q.id, { topic: q.topic, subject: q.subject, subtopic: q.subtopic, answer: q.answer, difficulty: q.difficulty }]))
       mutate((s) => {
         s.attempts[id] = { id, kind, title, day_no, date: todayISO(), topics, question_ids: questions.map((q) => q.id), meta, sections, session_id, duration_sec, negative,
-          marks, return_to, mock_type, answers: {}, started_at: ts, submitted_at: null, updated_at: ts }
+          marks, return_to, mock_type, reuse_key, answers: {}, started_at: ts, submitted_at: null, updated_at: ts }
       })
       return id
     },

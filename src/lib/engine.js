@@ -21,7 +21,6 @@ export const TOPIC_STEPS = [
   { key: 'shortcuts', label: 'Shortcuts / Tricks', short: 'Shortcuts', icon: '💡' },
   { key: 'practice', label: 'Practice Questions', short: 'Practice', icon: '📝' },
   { key: 'revision', label: 'Revision', short: 'Revise', icon: '🔄' },
-  { key: 'quiz', label: 'Revision Quiz', short: 'Quiz', icon: '🧠' },
 ]
 
 export const accuracy = (correct, attempted) => (attempted ? Math.round((correct / attempted) * 1000) / 10 : 0)
